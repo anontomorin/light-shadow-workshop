@@ -84,6 +84,57 @@ async function mouse(type, x, y, button = 'left') {
   });
 }
 
+/**
+ * 读取画布像素并统计"影子主题色"的分布，用于验证重叠区域颜色均匀。
+ * 通过 CDP 直接抓画布位图，避免受页面上其它 DOM 干扰。
+ */
+async function shadowPixelStats(x0, y0, x1, y1) {
+  const res = await send('Page.captureScreenshot', {
+    format: 'png',
+    clip: { x: x0, y: y0, width: x1 - x0, height: y1 - y0, scale: 1 },
+  });
+  const file = join(OUT_DIR, '_tmp-probe.png');
+  writeFileSync(file, Buffer.from(res.data, 'base64'));
+  const stats = await evaluateWithPng(
+    `(async (dataUrl) => {
+      const blob = await (await fetch(dataUrl)).blob();
+      const bmp = await createImageBitmap(blob);
+      const c = document.createElement('canvas');
+      c.width = bmp.width; c.height = bmp.height;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(bmp, 0, 0);
+      const d = ctx.getImageData(0, 0, bmp.width, bmp.height).data;
+      // 影子主题色 #31455a → 大致落在 (49, 69, 90) 附近
+      const near = (r, g, b) => Math.abs(r - 49) < 46 && Math.abs(g - 69) < 46 && Math.abs(b - 90) < 46 && b > r;
+      const buckets = new Map();
+      let count = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        const r = d[i], g = d[i + 1], b = d[i + 2];
+        if (!near(r, g, b)) continue;
+        count++;
+        const key = (r >> 2) + ',' + (g >> 2) + ',' + (b >> 2);
+        buckets.set(key, (buckets.get(key) || 0) + 1);
+      }
+      return { count, distinct: buckets.size };
+    })`,
+    `data:image/png;base64,${res.data}`,
+  );
+  return stats;
+}
+
+/** 调用页面内的异步函数并注入一个 base64 图片数据，避免受本地文件权限限制 */
+async function evaluateWithPng(expression, dataUrl) {
+  const res = await send('Runtime.evaluate', {
+    expression: `(${expression})(${JSON.stringify(dataUrl)})`,
+    returnByValue: true,
+    awaitPromise: true,
+  });
+  if (res.exceptionDetails) {
+    throw new Error(`evaluate 失败：${res.exceptionDetails.text} ${res.result?.description ?? ''}`);
+  }
+  return res.result?.value;
+}
+
 /** 在渲染中插入一个可读的检查点，等待若干帧 */
 const waitFrames = (n = 12) =>
   evaluate(
@@ -495,6 +546,34 @@ async function main() {
   const labShadow0 = await evaluate(`window.__lightShadow.wallShadowCount()`);
   check('实验室已在墙面绘制影子', labShadow0 >= 3, `墙面影子图元=${labShadow0}`);
   await screenshot('09-lab');
+
+  // 重叠区域不得出现颜色接缝：把多个物体叠在一起，检查影子色是否只有一种
+  await evaluate(`window.__lightShadow.overlapProbe()`);
+  await sleep(700);
+  await waitFrames(10);
+  const stageRect = await evaluate(
+    `(() => { const r = document.querySelector('.lab-screen canvas').getBoundingClientRect(); return { left: r.left, top: r.top, width: r.width, height: r.height }; })()`,
+  );
+  const probe = await shadowPixelStats(
+    Math.round(stageRect.left + stageRect.width * 0.2),
+    Math.round(stageRect.top + stageRect.height * 0.15),
+    Math.round(stageRect.left + stageRect.width * 0.8),
+    Math.round(stageRect.top + stageRect.height * 0.85),
+  );
+  check(
+    '影子采样到足够像素',
+    probe.count > 400,
+    `影子像素=${probe.count}`,
+  );
+  check(
+    '重叠区域颜色均匀（无叠加接缝）',
+    probe.distinct <= 3,
+    `不同色阶数=${probe.distinct}（越接近 1 越说明是单次填充）`,
+  );
+  await screenshot('09b-overlap');
+  await evaluate(`window.__lightShadow.resetLabScene && window.__lightShadow.resetLabScene()`);
+  await sleep(500);
+  await waitFrames(8);
 
   // 添加几何体
   await evaluate(

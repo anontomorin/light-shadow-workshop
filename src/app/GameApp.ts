@@ -236,6 +236,24 @@ export class GameApp {
         this.addLabShape(shape);
         return this.lab.count;
       },
+      /**
+       * 测试用：把实验室里的物体全部叠到同一处，制造大面积影子重叠。
+       * 用于验证"重叠区域颜色均匀、无叠加接缝"。
+       */
+      overlapProbe: () => {
+        const objs = this.lab.objects;
+        const base = this.lab.transforms.get(objs[0]?.id ?? '');
+        if (!base) return 0;
+        objs.forEach((o) => {
+          const t = this.lab.transforms.get(o.id);
+          if (!t) return;
+          const next = { ...t, x: base.x, y: base.y, z: base.z };
+          this.lab.transforms.set(o.id, next);
+          this.studio.updateTransform(o.id, next);
+        });
+        this.labDirty = true;
+        return objs.length;
+      },
       /** 测试用：读取自由实验室的物体与光源状态 */
       getLabState: () => ({
         count: this.lab.count,

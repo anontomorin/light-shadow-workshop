@@ -98,6 +98,8 @@ export class SceneManager {
       antialias: true,
       alpha: false,
       powerPreference: 'high-performance',
+      // 墙面影子靠模板缓冲合并重叠区域（否则半透明叠加会露出接缝）
+      stencil: true,
     });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
