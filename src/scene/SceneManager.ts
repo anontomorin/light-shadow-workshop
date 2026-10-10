@@ -250,9 +250,10 @@ export class SceneManager {
       lastX = e.clientX;
       lastY = e.clientY;
       if (mode === 'orbit') {
+        // 俯仰方向：向下拖动 = 抬高相机（视角更俯视），与多数三维软件的手感一致
         this.setView({
           azimuth: this.view.azimuth - dx * 0.22,
-          elevation: this.view.elevation - dy * 0.22,
+          elevation: this.view.elevation + dy * 0.22,
         });
       } else {
         this.panBy(dx, dy);

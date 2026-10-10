@@ -310,6 +310,24 @@ async function main() {
     Math.abs(orbitAfter.azimuth - orbitBefore.azimuth) > 5,
     `水平角 ${orbitBefore.azimuth.toFixed(1)}° → ${orbitAfter.azimuth.toFixed(1)}°`,
   );
+
+  // 俯仰方向：向左下拖动应抬高相机（俯仰角增大）
+  const elevBefore = await evaluate(`window.__lightShadow.getView()`);
+  await mouse('mousePressed', blank.x, blank.y);
+  await sleep(80);
+  for (let i = 1; i <= 12; i++) {
+    await mouse('mouseMoved', blank.x, blank.y + i * 8);
+    await sleep(22);
+  }
+  await mouse('mouseReleased', blank.x, blank.y + 12 * 8);
+  await sleep(320);
+  await waitFrames(6);
+  const elevAfter = await evaluate(`window.__lightShadow.getView()`);
+  check(
+    '向下拖动抬高俯仰角（视线更俯视）',
+    elevAfter.elevation > elevBefore.elevation + 5,
+    `俯仰角 ${elevBefore.elevation.toFixed(1)}° → ${elevAfter.elevation.toFixed(1)}°`,
+  );
   const orbitObjectBefore = await evaluate(`window.__lightShadow.getState().objects[0].transform`);
   check(
     '环绕视角不会误移动物体',
