@@ -5,6 +5,7 @@
 - **技术栈**：Vite + TypeScript + Three.js（渲染）+ Canvas 2D（掩码计算）
 - **运行形态**：纯前端，无后端、无账号、无数据库
 - **核心机制**：真实几何投影计算 + 像素掩码 IoU 轮廓匹配（非预设动画、非进度条伪造）
+- **在线试玩**：<https://anontomorin.github.io/light-shadow-workshop/>
 
 ---
 
@@ -36,6 +37,15 @@ node scripts/e2e-check.mjs
 6 关逐关可解、重置/提示/下一关、刷新后存档恢复，并顺带产出 `docs/shots/` 截图。
 
 部署时把 `dist/` 目录整体上传到任意静态托管即可（Nginx / OSS / GitHub Pages 等）。
+
+### GitHub Pages 自动部署
+
+仓库已配置 `.github/workflows/deploy-pages.yml`：向 `main` 分支推送后会自动执行
+`npm ci` → `npm run build` → 发布到 GitHub Pages，并在 Actions 页面手动触发（workflow_dispatch）。
+
+- 在线地址：<https://anontomorin.github.io/light-shadow-workshop/>
+- 页面路径由 Pages 的子路径 `/light-shadow-workshop/` 提供，因此 `vite.config.ts` 中已把
+  `base` 设为 `'./'`（相对路径），确保子目录下资源不会 404。
 
 ---
 
