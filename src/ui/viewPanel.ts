@@ -9,7 +9,7 @@ import {
 /**
  * 观看视角面板：关卡界面与自由实验室共用。
  *
- * 之所以同时提供滑杆与预设按钮，是因为鼠标环绕（右键拖动）不容易被发现，
+ * 之所以同时提供滑杆与预设按钮，是因为鼠标环绕（左键拖动空白处）不容易被发现，
  * 而滑杆可以直接、精确地把视角调到想要的位置。
  */
 
@@ -82,7 +82,7 @@ export function createViewPanel(handlers: ViewPanelHandlers): ViewPanel {
       }),
     ]),
     h('div', { class: 'tiny muted', style: { marginTop: '8px', lineHeight: '1.6' } }, [
-      '右键拖动 = 环绕观察，Shift + 右键 / 中键拖动 = 平移，滚轮 = 缩放。',
+      '在空白处按住左键拖动 = 环绕观察，Ctrl + 左键拖动 = 平移，滚轮 = 缩放。',
     ]),
   ]);
 

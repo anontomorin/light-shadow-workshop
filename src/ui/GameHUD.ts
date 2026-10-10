@@ -172,7 +172,7 @@ export class GameHUD {
       h('div', { class: 'side-section' }, [
         h('h3', { text: '操作说明' }),
         h('div', { class: 'keyhint' }, [
-          h('div', {}, ['左键点击 = 选中物体；按住拖动 = 移动']),
+          h('div', {}, ['左键点物体 = 选中；按住拖动 = 移动']),
           h('div', {}, [
             h('span', { class: 'kbd', text: 'Q' }),
             ' / ',
@@ -180,7 +180,7 @@ export class GameHUD {
             ' = 旋转 5°（Shift 加速）',
           ]),
           h('div', {}, ['方向键 = 微调位置（Shift 加速）']),
-          h('div', {}, ['右键拖动 = 环绕视角；滚轮 = 缩放']),
+          h('div', {}, ['左键拖空白处 = 环绕视角；滚轮 = 缩放']),
           h('div', {}, [
             h('span', { class: 'kbd', text: 'R' }),
             ' = 重置关卡　',

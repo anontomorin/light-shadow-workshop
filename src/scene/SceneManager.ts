@@ -72,6 +72,10 @@ export class SceneManager {
   private view: ViewState = { ...BASE_VIEW };
   private pan = new THREE.Vector3();
   private viewListeners: Array<(v: ViewState) => void> = [];
+  /** 由 GameApp 提供：判断某个屏幕点是否落在可交互物体上（决定左键是拖物体还是转视角） */
+  private pickTest: ((clientX: number, clientY: number) => boolean) | null = null;
+  /** 是否允许左键环绕（标题/选关等只读界面关闭，避免误转视角） */
+  private leftOrbitEnabled = false;
 
   private onFrameCallbacks: Array<(dt: number) => void> = [];
   private running = false;
@@ -145,6 +149,19 @@ export class SceneManager {
     this.viewListeners.push(cb);
   }
 
+  /**
+   * 注册"命中测试"回调：给定屏幕坐标，返回该处是否是可交互物体。
+   * 有了它，左键才能既拖动物体（点在物体上）又环绕视角（点在空白处）。
+   */
+  setPickTest(fn: ((clientX: number, clientY: number) => boolean) | null): void {
+    this.pickTest = fn;
+  }
+
+  /** 开启/关闭左键环绕（在标题、选关等非交互界面关闭，防止误操作） */
+  setLeftOrbitEnabled(v: boolean): void {
+    this.leftOrbitEnabled = v;
+  }
+
   /** 局部更新视角（未提供的字段保持不变），越界值会被夹紧 */
   setView(part: Partial<ViewState>): void {
     if (this.disposed) return;
@@ -185,17 +202,35 @@ export class SceneManager {
     let lastY = 0;
     let pointerId = -1;
 
+    // 拖动手感：细微抖动不算拖动，只有超过阈值才吸附为环绕
+    const DRAG_THRESHOLD = 3;
+    let pendingOrbit = false;
+    let startX = 0;
+    let startY = 0;
+
     // 右键用于环绕，需要屏蔽默认的上下文菜单
     const onContextMenu = (e: Event) => e.preventDefault();
 
     const onPointerDown = (e: PointerEvent) => {
-      // 左键留给物体交互；右键环绕（Shift + 右键平移），中键平移
-      if (e.button === 2) mode = e.shiftKey ? 'pan' : 'orbit';
-      else if (e.button === 1) mode = 'pan';
-      else return;
+      if (e.button === 0) {
+        // 左键：点在可交互物体上 → 交给物体交互；点在空白处 → 环绕视角
+        if (!this.leftOrbitEnabled) return;
+        if (this.pickTest && this.pickTest(e.clientX, e.clientY)) return;
+        mode = e.ctrlKey || e.metaKey ? 'pan' : 'orbit';
+        el.style.cursor = mode === 'pan' ? 'move' : 'grabbing';
+      } else if (e.button === 2) {
+        mode = e.shiftKey ? 'pan' : 'orbit';
+      } else if (e.button === 1) {
+        mode = 'pan';
+      } else {
+        return;
+      }
       pointerId = e.pointerId;
       lastX = e.clientX;
       lastY = e.clientY;
+      startX = e.clientX;
+      startY = e.clientY;
+      pendingOrbit = true;
       el.setPointerCapture?.(e.pointerId);
       e.preventDefault();
     };
@@ -204,6 +239,14 @@ export class SceneManager {
       if (!mode || e.pointerId !== pointerId) return;
       const dx = e.clientX - lastX;
       const dy = e.clientY - lastY;
+
+      // 拖动阈值：位移超过阈值后才开始真正转动，避免"想点击却轻微转了视角"
+      if (pendingOrbit) {
+        const moved = Math.abs(e.clientX - startX) + Math.abs(e.clientY - startY);
+        if (moved < DRAG_THRESHOLD) return;
+        pendingOrbit = false;
+      }
+
       lastX = e.clientX;
       lastY = e.clientY;
       if (mode === 'orbit') {
@@ -220,6 +263,8 @@ export class SceneManager {
     const onPointerUp = (e: PointerEvent) => {
       if (!mode) return;
       mode = null;
+      pendingOrbit = false;
+      el.style.cursor = '';
       el.releasePointerCapture?.(e.pointerId);
     };
 

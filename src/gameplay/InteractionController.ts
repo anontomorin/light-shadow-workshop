@@ -98,6 +98,18 @@ export class InteractionController {
     return (hits[0].object.userData.objectId as string) ?? null;
   }
 
+  /**
+   * 命中测试：该屏幕坐标下是否有可交互物体。
+   * 供 SceneManager 判断左键该拖物体（命中）还是环绕视角（落空）。
+   * 未启用交互的界面一律返回 false，转而允许左键环绕。
+   */
+  hitTestAt(clientX: number, clientY: number): boolean {
+    if (!this.enabled) return false;
+    const ndc = this.sceneManager.toNDC(clientX, clientY);
+    this.raycaster.setFromCamera(ndc, this.sceneManager.camera);
+    return this.raycaster.intersectObjects(this.scene.getPickables(), false).length > 0;
+  }
+
   private handlePointerDown(e: PointerEvent): void {
     if (!this.enabled || e.button !== 0) return;
     const id = this.pick(e);

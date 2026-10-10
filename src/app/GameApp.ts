@@ -158,6 +158,12 @@ export class GameApp {
       },
     );
 
+    // 左键的归属由"该处是否有可交互物体"决定：
+    // 命中物体 → 拖动物体；落在空白 → 环绕视角。
+    this.sceneManager.setPickTest(
+      (x, y) => this.interaction?.hitTestAt(x, y) === true,
+    );
+
     this.keyHandler = (e: KeyboardEvent) => this.onKeyDown(e);
     window.addEventListener('keydown', this.keyHandler);
 
@@ -263,6 +269,8 @@ export class GameApp {
           z: obj.target.z,
         });
       },
+      /** 测试用：某屏幕点是否落在可交互物体上（等价于左键的归属判断） */
+      hitTest: (x: number, y: number) => this.interaction.hitTestAt(x, y),
       /** 测试用：读取当前掩码与目标掩码的 IoU */
       score: () =>
         CompletionChecker.scoreOf(
@@ -279,6 +287,8 @@ export class GameApp {
     this.screen = name;
     this.closeModal();
     this.root.replaceChildren();
+    // 左键环绕只在真正可交互的玩法界面开放
+    this.sceneManager.setLeftOrbitEnabled(name === 'game' || name === 'lab');
     if (name === 'title') {
       this.interaction.setEnabled(false);
       this.titleScreen.setLabUnlocked(this.state.labUnlocked);
@@ -339,6 +349,7 @@ export class GameApp {
 
   private leaveLab(): void {
     this.interaction.setEnabled(false);
+    this.sceneManager.setLeftOrbitEnabled(false);
     this.showScreen('title');
   }
 

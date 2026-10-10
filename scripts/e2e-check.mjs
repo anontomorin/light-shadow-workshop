@@ -274,6 +274,57 @@ async function main() {
     `水平角=${viewBack.azimuth.toFixed(2)}°`,
   );
 
+  // ── 3c. 左键拖动空白处 = 环绕视角 ────────────────────────
+  console.log('\n[3c] 左键拖动改变观看视角');
+  const orbitBefore = await evaluate(`window.__lightShadow.getView()`);
+  // 在画布内搜索一个确定不会命中物体的空白点，避免"以为在拖空白，其实点到了物体"
+  const blank = await evaluate(
+    `(() => {
+      const c = document.querySelector('.stage canvas');
+      const r = c.getBoundingClientRect();
+      for (const fy of [0.08, 0.16, 0.24, 0.5, 0.84]) {
+        for (const fx of [0.06, 0.14, 0.86, 0.94]) {
+          const x = r.left + r.width * fx;
+          const y = r.top + r.height * fy;
+          if (!window.__lightShadow.hitTest(x, y)) return { x, y };
+        }
+      }
+      return null;
+    })()`,
+  );
+  check('找到用于环绕的空白位置', !!blank, blank ? `(${blank.x.toFixed(0)}, ${blank.y.toFixed(0)})` : 'null');
+  const bx = blank.x;
+  const by = blank.y;
+  await mouse('mousePressed', bx, by);
+  await sleep(80);
+  for (let i = 1; i <= 14; i++) {
+    await mouse('mouseMoved', bx + i * 9, by - i * 2);
+    await sleep(22);
+  }
+  await mouse('mouseReleased', bx + 14 * 9, by - 14 * 2);
+  await sleep(320);
+  await waitFrames(6);
+  const orbitAfter = await evaluate(`window.__lightShadow.getView()`);
+  check(
+    '左键拖动空白处可环绕观看视角',
+    Math.abs(orbitAfter.azimuth - orbitBefore.azimuth) > 5,
+    `水平角 ${orbitBefore.azimuth.toFixed(1)}° → ${orbitAfter.azimuth.toFixed(1)}°`,
+  );
+  const orbitObjectBefore = await evaluate(`window.__lightShadow.getState().objects[0].transform`);
+  check(
+    '环绕视角不会误移动物体',
+    Math.abs(orbitObjectBefore.x - state1.objects[0].transform.x) < 0.02 &&
+      Math.abs(orbitObjectBefore.y - state1.objects[0].transform.y) < 0.02,
+    `x=${orbitObjectBefore.x.toFixed(2)}, y=${orbitObjectBefore.y.toFixed(2)}`,
+  );
+  await screenshot('03c-orbited');
+  // 回到默认机位，后续拖动检查仍以初始视角进行
+  await evaluate(
+    `(() => { const b = [...document.querySelectorAll('.btn')].find(x => x.textContent.trim() === '复位视角'); if (b) b.click(); })()`,
+  );
+  await sleep(400);
+  await waitFrames(6);
+
   // ── 4. 真实鼠标拖动 ─────────────────────────────────────
   console.log('\n[4] 真实鼠标拖动');
   const objId = state1.objects[0].id;
