@@ -464,8 +464,16 @@
 /* ---------------- 自由实验室 ---------------- */
 .lab-screen {
   display: grid;
-  grid-template-columns: 1fr 280px;
+  grid-template-columns: 1fr 320px;
+  grid-template-rows: 1fr auto;
   background: var(--bg);
+}
+
+/* 关卡选择页头部的按钮组 */
+.header-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 /* ---------------- 响应式：窄窗口改为上下布局 ---------------- */
@@ -502,6 +510,22 @@
 
   .lab-screen {
     grid-template-columns: 1fr;
-    grid-template-rows: 1fr auto;
+    grid-template-rows: 1fr auto auto;
+  }
+
+  .lab-screen .stage-wrap {
+    grid-column: 1;
+    grid-row: 1;
+    min-height: 320px;
+  }
+
+  .lab-screen .side-panel {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .lab-screen .game-dock {
+    grid-column: 1;
+    grid-row: 3;
   }
 }

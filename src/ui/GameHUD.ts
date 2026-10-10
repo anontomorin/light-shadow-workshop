@@ -1,10 +1,15 @@
 import { h, sliderRow } from './dom';
+import { createViewPanel, type ViewPanel } from './viewPanel';
+import type { ViewPreset, ViewState } from '../scene/SceneManager';
 import type { LevelControls, LevelDefinition, Transform3D } from '../gameplay/LevelData';
 import { OBJECT_LIMITS } from '../projection/Projector';
 import type { LightState } from '../gameplay/LightController';
 import type { ShadowObjectDefinition } from '../gameplay/LevelData';
 
 /** 游戏主界面：三维舞台 + 右侧控制面板 + 底部操作坞 */
+
+/** 面内旋转的单步角度 */
+const ROTATE_STEP = 5;
 
 /** 光源滑杆的可用范围 */
 export interface LightLimits {
@@ -24,9 +29,13 @@ export interface GameHUDHandlers {
   onNext: () => void;
   onSelectObject: (id: string) => void;
   onRotate: (delta: number) => void;
+  onRotateTo: (deg: number) => void;
   onFlip: (deg: number) => void;
   onDepth: (z: number) => void;
   onLightAxis: (axis: 'x' | 'y' | 'z', value: number) => void;
+  onViewChange: (part: Partial<ViewState>) => void;
+  onViewPreset: (name: ViewPreset) => void;
+  onViewReset: () => void;
 }
 
 export class GameHUD {
@@ -57,7 +66,9 @@ export class GameHUD {
 
   private depthSlider: ReturnType<typeof sliderRow> | null = null;
   private flipSlider: ReturnType<typeof sliderRow> | null = null;
+  private rotSlider: ReturnType<typeof sliderRow> | null = null;
   private lightSliders: Record<string, ReturnType<typeof sliderRow>> = {};
+  private viewPanel: ViewPanel;
 
   private readoutEls: Record<string, HTMLElement> = {};
 
@@ -146,9 +157,16 @@ export class GameHUD {
       h('div', { class: 'side-hint' }),
     ]);
 
+    this.viewPanel = createViewPanel({
+      onViewChange: handlers.onViewChange,
+      onViewPreset: handlers.onViewPreset,
+      onViewReset: handlers.onViewReset,
+    });
+
     const sidePanel = h('aside', { class: 'side-panel' }, [
       h('div', { class: 'side-section' }, [h('h3', { text: '场景物体' }), this.chipsEl]),
       this.objectPanel,
+      h('div', { class: 'side-section' }, [h('h3', { text: '观看视角' }), this.viewPanel.root]),
       this.lightPanel,
       this.hintBox,
       h('div', { class: 'side-section' }, [
@@ -159,18 +177,17 @@ export class GameHUD {
             h('span', { class: 'kbd', text: 'Q' }),
             ' / ',
             h('span', { class: 'kbd', text: 'E' }),
-            ' = 旋转 15°',
+            ' = 旋转 5°（Shift 加速）',
           ]),
+          h('div', {}, ['方向键 = 微调位置（Shift 加速）']),
+          h('div', {}, ['右键拖动 = 环绕视角；滚轮 = 缩放']),
           h('div', {}, [
             h('span', { class: 'kbd', text: 'R' }),
             ' = 重置关卡　',
             h('span', { class: 'kbd', text: 'H' }),
             ' = 提示',
           ]),
-          h('div', {}, [
-            h('span', { class: 'kbd', text: 'Esc' }),
-            ' = 暂停 / 关闭弹窗　滚轮 = 缩放视角',
-          ]),
+          h('div', {}, [h('span', { class: 'kbd', text: 'Esc' }), ' = 暂停 / 关闭弹窗']),
         ]),
       ]),
     ]);
@@ -230,6 +247,7 @@ export class GameHUD {
     this.objectBody.replaceChildren();
     this.depthSlider = null;
     this.flipSlider = null;
+    this.rotSlider = null;
 
     if (!controls.rotate && !controls.depth && !controls.flip) {
       this.objectBody.append(
@@ -261,16 +279,26 @@ export class GameHUD {
         h('div', { class: 'rotate-group' }, [
           h('button', {
             class: 'btn btn-sm',
-            text: '↺ 15°',
-            onclick: () => this.handlers.onRotate(-15),
+            text: `↺ ${ROTATE_STEP}°`,
+            onclick: () => this.handlers.onRotate(-ROTATE_STEP),
           }),
           h('button', {
             class: 'btn btn-sm',
-            text: '↻ 15°',
-            onclick: () => this.handlers.onRotate(15),
+            text: `↻ ${ROTATE_STEP}°`,
+            onclick: () => this.handlers.onRotate(ROTATE_STEP),
           }),
         ]),
       );
+      this.rotSlider = sliderRow({
+        label: '角度',
+        min: -180,
+        max: 180,
+        step: 1,
+        value: 0,
+        format: (v) => `${v.toFixed(0)}°`,
+        onInput: (v) => this.handlers.onRotateTo(v),
+      });
+      this.objectBody.append(h('div', { style: { marginTop: '10px' } }), this.rotSlider.row);
     }
 
     if (controls.flip) {
@@ -357,6 +385,12 @@ export class GameHUD {
     if (this.readoutEls.xy) this.readoutEls.xy.textContent = `${t.x.toFixed(1)}, ${t.y.toFixed(1)}`;
     this.depthSlider?.set(t.z);
     this.flipSlider?.set(t.rotationY);
+    this.rotSlider?.set(t.rotationZ);
+  }
+
+  /** 同步观看视角面板的滑杆读数 */
+  setView(v: ViewState): void {
+    this.viewPanel.setView(v);
   }
 
   setLight(light: LightState, limits: LightLimits): void {

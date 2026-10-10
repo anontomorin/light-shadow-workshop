@@ -1,11 +1,13 @@
-import { SceneManager } from '../scene/SceneManager';
+import { SceneManager, type ViewPreset, type ViewState } from '../scene/SceneManager';
 import { StudioScene } from '../scene/StudioScene';
 import { SilhouetteRasterizer } from '../projection/SilhouetteRasterizer';
 import { LevelManager } from '../gameplay/LevelManager';
 import { LightController, type LightState } from '../gameplay/LightController';
 import { InteractionController } from '../gameplay/InteractionController';
 import { CompletionChecker, type Rank } from '../gameplay/CompletionChecker';
+import { LabSession, LAB_CONTROLS } from '../gameplay/LabSession';
 import { GameHUD } from '../ui/GameHUD';
+import { LabHUD } from '../ui/LabHUD';
 import { TitleScreen } from '../ui/TitleScreen';
 import { LevelSelect } from '../ui/LevelSelect';
 import { ResultModal } from '../ui/ResultModal';
@@ -13,9 +15,14 @@ import { PausePanel } from '../ui/SettingsPanel';
 import { GameState } from './GameState';
 import { SoundKit } from './SoundKit';
 import { getLevelById, LEVELS, TOTAL_LEVELS } from '../data/levels';
-import type { LevelDefinition, ShadowObjectDefinition, Transform3D } from '../gameplay/LevelData';
+import type {
+  LevelDefinition,
+  ShadowObjectDefinition,
+  ShapeType,
+  Transform3D,
+} from '../gameplay/LevelData';
 
-type ScreenName = 'title' | 'levels' | 'game';
+type ScreenName = 'title' | 'levels' | 'game' | 'lab';
 
 /** 匹配度预览的节流间隔（ms） */
 const PREVIEW_INTERVAL = 90;
@@ -23,6 +30,8 @@ const PREVIEW_INTERVAL = 90;
 const COMMIT_DEBOUNCE = 160;
 /** 首次达标后进行第二次确认校验的间隔（ms） */
 const CONFIRM_DELAY = 200;
+/** 通关需要连续达标的校验次数：3 次意味着必须"稳住"匹配度，而不是擦过阈值 */
+const REQUIRED_CONSECUTIVE_HITS = 3;
 
 /**
  * 应用主控：串联场景、关卡、交互、判定与界面。
@@ -42,6 +51,7 @@ export class GameApp {
   private checker: CompletionChecker;
 
   private hud: GameHUD;
+  private labHUD: LabHUD;
   private titleScreen: TitleScreen;
   private levelSelect: LevelSelect;
 
@@ -49,9 +59,12 @@ export class GameApp {
   private modal: HTMLElement | null = null;
   private currentLevel: LevelDefinition | null = null;
 
+  private lab: LabSession;
+
   private cleared = false;
   private hintIndex = 0;
   private projDirty = false;
+  private labDirty = false;
   private lastIou = 0;
 
   private previewTimer: number | null = null;
@@ -67,6 +80,12 @@ export class GameApp {
     this.sound.enabled = this.state.soundEnabled;
 
     // ---- 界面 ----
+    const viewHandlers = {
+      onViewChange: (part: Partial<ViewState>) => this.sceneManager.setView(part),
+      onViewPreset: (name: ViewPreset) => this.sceneManager.setPreset(name),
+      onViewReset: () => this.sceneManager.resetView(),
+    };
+
     this.hud = new GameHUD({
       onBack: () => this.goLevels(),
       onPause: () => this.openPause(),
@@ -75,23 +94,41 @@ export class GameApp {
       onNext: () => this.nextLevel(),
       onSelectObject: (id) => this.selectObject(id),
       onRotate: (d) => this.rotateSelected(d),
+      onRotateTo: (d) => this.interaction.setSelectedRotation(d),
       onFlip: (v) => this.flipSelected(v),
       onDepth: (v) => this.setDepth(v),
       onLightAxis: (axis, v) => this.setLightAxis(axis, v),
+      ...viewHandlers,
+    });
+
+    this.labHUD = new LabHUD({
+      onBack: () => this.leaveLab(),
+      onAddShape: (shape) => this.addLabShape(shape),
+      onSelectObject: (id) => this.selectObject(id),
+      onRotate: (d) => this.rotateSelected(d),
+      onRotateTo: (d) => this.interaction.setSelectedRotation(d),
+      onFlip: (v) => this.flipSelected(v),
+      onDepth: (v) => this.setDepth(v),
+      onDeleteObject: () => this.deleteLabObject(),
+      onResetScene: () => this.resetLabScene(),
+      onLightAxis: (axis, v) => this.setLightAxis(axis, v),
+      ...viewHandlers,
     });
 
     this.titleScreen = new TitleScreen(
       {
         onStart: () => this.startLevel(this.firstUnclearedLevel()),
         onLevelSelect: () => this.goLevels(),
+        onLab: () => this.enterLab(),
       },
-      'v1.0.0',
+      'v1.1.0',
     );
     this.titleScreen.setLabUnlocked(this.state.labUnlocked);
 
     this.levelSelect = new LevelSelect(this.state, {
       onPick: (id) => this.startLevel(id),
       onBack: () => this.showScreen('title'),
+      onLab: () => this.enterLab(),
     });
 
     // ---- 三维场景 ----
@@ -99,12 +136,17 @@ export class GameApp {
     this.studio = new StudioScene();
     this.sceneManager.scene.add(this.studio.root);
     this.sceneManager.onFrame((dt) => this.onFrame(dt));
+    this.sceneManager.onViewChange((v) => {
+      this.hud.setView(v);
+      this.labHUD.setView(v);
+    });
 
     // ---- 玩法 ----
     this.rasterizer = new SilhouetteRasterizer();
     this.levelManager = new LevelManager(this.rasterizer);
+    this.lab = new LabSession();
     this.light = new LightController((s) => this.applyLight(s));
-    this.checker = new CompletionChecker(2);
+    this.checker = new CompletionChecker(REQUIRED_CONSECUTIVE_HITS);
     this.interaction = new InteractionController(
       this.studio,
       this.sceneManager,
@@ -132,7 +174,7 @@ export class GameApp {
    */
   private installDebugHook(): void {
     const api = {
-      version: '1.0.0',
+      version: '1.1.0',
       getState: () => ({
         screen: this.screen,
         levelId: this.currentLevel?.id ?? null,
@@ -149,7 +191,17 @@ export class GameApp {
           : [],
         lastIou: this.lastIou,
         unlocked: this.state.unlocked,
+        labObjects: this.lab.count,
+        matchThreshold: this.currentLevel?.matchThreshold ?? null,
+        requiredHits: REQUIRED_CONSECUTIVE_HITS,
       }),
+      /** 测试用：读取当前观看视角 */
+      getView: () => this.sceneManager.getView(),
+      /** 测试用：设置观看视角（走与 UI 完全相同的夹紧逻辑） */
+      setView: (part: Partial<ViewState>) => {
+        this.sceneManager.setView(part);
+        return this.sceneManager.getView();
+      },
       /** 测试用：把全部物体与光源设置为关卡的目标参数 */
       solve: () => {
         if (!this.currentLevel) return false;
@@ -168,12 +220,39 @@ export class GameApp {
         this.startLevel(id);
         return true;
       },
-      /** 测试用：返回某个物体在屏幕上的像素坐标 */
+      /** 测试用：进入自由实验室 */
+      goToLab: () => {
+        this.enterLab();
+        return true;
+      },
+      /** 测试用：在自由实验室添加一个形状 */
+      addLabShape: (shape: ShapeType) => {
+        this.addLabShape(shape);
+        return this.lab.count;
+      },
+      /** 测试用：读取自由实验室的物体与光源状态 */
+      getLabState: () => ({
+        count: this.lab.count,
+        ids: this.lab.objects.map((o) => o.id),
+        objects: this.lab.objects.map((o) => ({
+          id: o.id,
+          name: o.name,
+          transform: this.lab.transforms.get(o.id) ?? null,
+        })),
+        selected: this.lab.selectedId,
+        light: this.light.get(),
+      }),
+      /** 测试用：返回某物体在屏幕上的像素坐标（关卡与实验室通用） */
       screenPos: (id: string) => {
-        const t = this.levelManager.transforms.get(id);
+        const t =
+          this.screen === 'lab'
+            ? this.lab.transforms.get(id)
+            : this.levelManager.transforms.get(id);
         if (!t) return null;
         return this.sceneManager.worldToScreen({ x: t.x, y: t.y, z: t.z });
       },
+      /** 测试用：墙面上的当前影子图元数量 */
+      wallShadowCount: () => this.studio.projection.shadowMeshCount(),
       /** 测试用：返回某个物体目标位置对应的屏幕像素坐标 */
       targetScreenPos: (id: string) => {
         const obj = this.currentLevel?.objects.find((o) => o.id === id);
@@ -197,19 +276,29 @@ export class GameApp {
   // ───────────────────────── 屏幕切换 ─────────────────────────
 
   private showScreen(name: ScreenName): void {
-    this.closeModal();
     this.screen = name;
+    this.closeModal();
     this.root.replaceChildren();
     if (name === 'title') {
+      this.interaction.setEnabled(false);
       this.titleScreen.setLabUnlocked(this.state.labUnlocked);
       this.root.append(this.titleScreen.root);
       this.sceneManager.stop();
     } else if (name === 'levels') {
+      this.interaction.setEnabled(false);
       this.levelSelect.refresh();
       this.root.append(this.levelSelect.root);
       this.sceneManager.stop();
+    } else if (name === 'lab') {
+      this.root.append(this.labHUD.root);
+      this.labHUD.setView(this.sceneManager.getView());
+      this.sceneManager.mount(this.labHUD.stageEl);
+      this.sceneManager.start();
+      this.sceneManager.resize();
     } else {
       this.root.append(this.hud.root);
+      this.hud.setView(this.sceneManager.getView());
+      this.sceneManager.mount(this.hud.stageEl);
       this.sceneManager.start();
       this.sceneManager.resize();
     }
@@ -223,8 +312,89 @@ export class GameApp {
   }
 
   private goLevels(): void {
-    this.interaction.setEnabled(false);
     this.showScreen('levels');
+  }
+
+  // ───────────────────────── 自由实验室 ─────────────────────────
+
+  private enterLab(): void {
+    this.clearTimers();
+    this.currentLevel = null;
+    this.cleared = false;
+    this.projDirty = false;
+    this.labDirty = false;
+
+    this.showScreen('lab');
+
+    this.studio.projection.setTarget([]);
+    this.lab.reset();
+    this.interaction.setControls(LAB_CONTROLS);
+    this.light.setObjectDepthLimit(this.lab.maxObjectZ());
+    this.light.set({ ...this.lab.light });
+    this.labHUD.setLight(this.light.get(), this.light.limits());
+    this.labHUD.setView(this.sceneManager.getView());
+    this.rebuildLab();
+    this.sound.click();
+  }
+
+  private leaveLab(): void {
+    this.interaction.setEnabled(false);
+    this.showScreen('title');
+  }
+
+  /** 重建自由实验室的三维物体与界面列表 */
+  private rebuildLab(keepSelection?: string | null): void {
+    const defs = this.lab.objects;
+    this.studio.setObjects(
+      defs,
+      defs.map((o) => this.lab.transforms.get(o.id) ?? o.initial),
+    );
+    this.interaction.setControls(LAB_CONTROLS);
+    this.interaction.syncTransforms(this.lab.transforms);
+    this.labHUD.setObjects(defs);
+    this.labHUD.setLight(this.light.get(), this.light.limits());
+
+    const wanted = keepSelection !== undefined ? keepSelection : this.lab.selectedId;
+    const id = wanted && defs.some((o) => o.id === wanted) ? wanted : defs[0]?.id ?? null;
+    this.lab.selectedId = id;
+    this.interaction.select(id);
+    this.markLabDirty();
+  }
+
+  private addLabShape(shape: ShapeType): void {
+    if (this.screen !== 'lab') return;
+    const def = this.lab.add(shape);
+    if (!def) {
+      this.sound.hint();
+      return;
+    }
+    this.light.setObjectDepthLimit(this.lab.maxObjectZ());
+    this.rebuildLab(def.id);
+    this.sound.click();
+  }
+
+  private deleteLabObject(): void {
+    if (this.screen !== 'lab') return;
+    const id = this.lab.selectedId;
+    if (!id) return;
+    this.lab.remove(id);
+    this.light.setObjectDepthLimit(this.lab.maxObjectZ());
+    this.rebuildLab();
+    this.sound.click();
+  }
+
+  private resetLabScene(): void {
+    if (this.screen !== 'lab') return;
+    this.lab.reset();
+    this.light.setObjectDepthLimit(this.lab.maxObjectZ());
+    this.light.set({ ...this.lab.light });
+    this.labHUD.setLight(this.light.get(), this.light.limits());
+    this.rebuildLab();
+    this.sound.click();
+  }
+
+  private markLabDirty(): void {
+    this.labDirty = true;
   }
 
   // ───────────────────────── 关卡流程 ─────────────────────────
@@ -235,6 +405,7 @@ export class GameApp {
     this.currentLevel = level;
     this.cleared = false;
     this.hintIndex = 0;
+    this.labDirty = false;
     this.checker.reset();
     this.clearTimers();
 
@@ -305,6 +476,13 @@ export class GameApp {
   }
 
   private onSelect(id: string | null): void {
+    if (this.screen === 'lab') {
+      const def = id ? this.lab.defOf(id) : null;
+      const t = id ? this.lab.transforms.get(id) : undefined;
+      this.labHUD.setSelected(def, t);
+      if (id) this.sound.click();
+      return;
+    }
     const def = id ? this.defOf(id) : null;
     const t = id ? this.levelManager.transforms.get(id) : undefined;
     this.hud.setSelected(def, t);
@@ -327,10 +505,18 @@ export class GameApp {
   private setLightAxis(axis: 'x' | 'y' | 'z', value: number): void {
     this.clearTimers();
     this.light.setAxis(axis, value);
-    this.hud.setLight(this.light.get(), this.light.limits());
+    const limits = this.light.limits();
+    if (this.screen === 'lab') this.labHUD.setLight(this.light.get(), limits);
+    else this.hud.setLight(this.light.get(), limits);
   }
 
   private applyLight(s: LightState): void {
+    if (this.screen === 'lab') {
+      this.lab.light = { ...s };
+      this.studio.setLightPosition(s);
+      this.markLabDirty();
+      return;
+    }
     this.levelManager.setLight(s);
     this.studio.setLightPosition(s);
     this.markDirty();
@@ -338,6 +524,12 @@ export class GameApp {
   }
 
   private onObjectChange(id: string, t: Transform3D): void {
+    if (this.screen === 'lab') {
+      this.lab.setTransform(id, t);
+      this.labHUD.setSelected(this.lab.defOf(id), t);
+      this.markLabDirty();
+      return;
+    }
     this.levelManager.setTransform(id, t);
     this.hud.setSelected(this.defOf(id), t);
     this.markDirty();
@@ -496,7 +688,7 @@ export class GameApp {
       this.modal.remove();
       this.modal = null;
     }
-    if (this.screen === 'game' && !this.cleared) {
+    if ((this.screen === 'game' && !this.cleared) || this.screen === 'lab') {
       this.interaction.setEnabled(true);
     }
   }
@@ -531,6 +723,11 @@ export class GameApp {
   // ───────────────────────── 键盘 ─────────────────────────
 
   private onKeyDown(e: KeyboardEvent): void {
+    if (this.screen === 'lab') {
+      if (e.key === 'Escape') this.leaveLab();
+      else if (e.key === 'r' || e.key === 'R') this.resetLabScene();
+      return;
+    }
     if (this.screen !== 'game') return;
     if (e.key === 'Escape') {
       if (this.modal) this.closeModal();
@@ -548,9 +745,12 @@ export class GameApp {
   // ───────────────────────── 每帧 ─────────────────────────
 
   private onFrame(dt: number): void {
-    if (this.projDirty) {
+    if (this.screen === 'game' && this.projDirty) {
       this.studio.projection.setCurrent(this.levelManager.currentPolygons());
       this.projDirty = false;
+    } else if (this.screen === 'lab' && this.labDirty) {
+      this.studio.projection.setCurrent(this.lab.polygons());
+      this.labDirty = false;
     }
     this.studio.update(dt);
   }

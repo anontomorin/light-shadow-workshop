@@ -173,18 +173,28 @@ export class InteractionController {
 
   // ───────────────────────── 键盘 ─────────────────────────
 
+  /** 旋转步长：按键默认 5°，按住 Shift 为 15° */
+  static readonly ROTATE_STEP = 5;
+  /** 方向键微调步长：默认 0.04（精修），按住 Shift 为 0.18（粗调） */
+  private static readonly NUDGE_FINE = 0.04;
+  private static readonly NUDGE_COARSE = 0.18;
+
   private handleKeyDown(e: KeyboardEvent): void {
     if (!this.enabled) return;
     const id = this.scene.getSelected();
     if (!id) return;
+    const step = e.shiftKey ? InteractionController.ROTATE_STEP * 3 : InteractionController.ROTATE_STEP;
     if (e.key === 'q' || e.key === 'Q') {
-      this.rotateSelected(-15);
+      this.rotateSelected(-step);
       e.preventDefault();
     } else if (e.key === 'e' || e.key === 'E') {
-      this.rotateSelected(15);
+      this.rotateSelected(step);
       e.preventDefault();
     } else if (e.key.startsWith('Arrow')) {
-      this.nudgeSelected(e.key, e.shiftKey ? 0.24 : 0.06);
+      const nudge = e.shiftKey
+        ? InteractionController.NUDGE_COARSE
+        : InteractionController.NUDGE_FINE;
+      this.nudgeSelected(e.key, nudge);
       e.preventDefault();
     }
   }
@@ -214,13 +224,26 @@ export class InteractionController {
     this.cb.onCommit();
   }
 
-  /** 旋转选中物体（步长 15° 或任意角度） */
+  /** 旋转选中物体（步长 5° 或任意角度） */
   rotateSelected(delta: number): void {
     const id = this.scene.getSelected();
     if (!id || !this.controls.rotate) return;
     const t = this.transforms.get(id);
     if (!t) return;
     const next: Transform3D = { ...t, rotationZ: normalizeAngle(t.rotationZ + delta) };
+    this.transforms.set(id, next);
+    this.scene.updateTransform(id, next);
+    this.cb.onChange(id, next);
+    this.cb.onCommit();
+  }
+
+  /** 直接设置面内旋转角（滑杆使用），用于精细对角度 */
+  setSelectedRotation(deg: number): void {
+    const id = this.scene.getSelected();
+    if (!id || !this.controls.rotate) return;
+    const t = this.transforms.get(id);
+    if (!t) return;
+    const next: Transform3D = { ...t, rotationZ: normalizeAngle(clampSafe(deg, -180, 180, t.rotationZ)) };
     this.transforms.set(id, next);
     this.scene.updateTransform(id, next);
     this.cb.onChange(id, next);

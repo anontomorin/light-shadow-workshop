@@ -7,6 +7,7 @@ import type { GameState } from '../app/GameState';
 export interface LevelSelectHandlers {
   onPick: (id: number) => void;
   onBack: () => void;
+  onLab: () => void;
 }
 
 export class LevelSelect {
@@ -28,7 +29,10 @@ export class LevelSelect {
           text: `共 ${TOTAL_LEVELS} 个关卡，难度逐步提升。通关后可以重玩争取更高评价。`,
         }),
       ]),
-      h('button', { class: 'btn', text: '返回标题页', onclick: handlers.onBack }),
+      h('div', { class: 'header-actions' }, [
+        h('button', { class: 'btn', text: '自由实验室', onclick: handlers.onLab }),
+        h('button', { class: 'btn', text: '返回标题页', onclick: handlers.onBack }),
+      ]),
     ]);
 
     this.root = h('section', { class: 'screen level-screen' }, [header, this.grid]);

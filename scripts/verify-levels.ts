@@ -1,13 +1,18 @@
 /**
  * 关卡可解性与数值验证脚本（Node 环境运行，不依赖浏览器）。
  *
- * 检查项：
+ * 检查项（"严通关"契约）：
  *   1. 用关卡的目标变换生成目标掩码，并把它渲染成 ASCII 预览，人工确认图案可识别；
  *   2. 目标变换 → 目标掩码的 IoU 必须接近 1.0（否则说明投影/光栅管线有 bug）；
  *   3. 初始变换 → 目标掩码的 IoU 必须明显低于通关阈值（否则关卡没有挑战）；
- *   4. 在目标变换附近加入小扰动，IoU 仍应高于通关阈值（否则玩家无法靠手操通关）；
- *   5. 所有物体必须位于光源与投影墙之间，且保留安全深度余量；
- *   6. 目标影子不得被墙面边界裁掉过多。
+ *   4. **粗对齐**（±0.12 世界单位 / ±5°）的 IoU 必须 **低于**通关阈值：
+ *      随手摆放不再能过关，必须精修；
+ *   5. **精对齐**（±0.05 / ±2°）的 IoU 必须 **达到**通关阈值，并达到大师阈值；
+ *   6. **离散控件可达性**：把目标变换吸附到玩家实际可用的控件粒度
+ *      （位置 0.04、深度 0.1、角度 1°、旋转 5°、光源 0.1），
+ *      所得 IoU 必须仍 ≥ 通关阈值，证明阈值是"够得着"的；
+ *   7. 所有物体必须位于光源与投影墙之间，且保留安全深度余量；
+ *   8. 目标影子不得被墙面边界裁掉过多。
  *
  * 运行：npm run verify
  */
@@ -179,6 +184,26 @@ for (const level of LEVELS) {
   // 精对齐：玩家看着匹配度仔细微调之后（约 ±0.05 世界单位 / ±2°）
   const iouFine = worstOf(0.05, 2);
 
+  // 离散控件可达性：把目标吸附到玩家实际能摁出的最小粒度，检查阈值够不够得着
+  const snap = (v: number, step: number) => Math.round(v / step) * step;
+  const gridTransforms = targetTransforms.map((t) => ({
+    x: snap(t.x, 0.04),
+    y: snap(t.y, 0.04),
+    z: snap(t.z, 0.1),
+    rotationX: 0,
+    rotationY: snap(t.rotationY, 1),
+    rotationZ: snap(t.rotationZ, 5),
+  }));
+  const gridLight = {
+    x: snap(level.light.target.x, 0.1),
+    y: snap(level.light.target.y, 0.1),
+    z: snap(level.light.target.z, 0.1),
+  };
+  const iouGrid = computeIoU(
+    rasterizeCPU(polygonsOf(level, gridTransforms, gridLight)),
+    targetMask,
+  );
+
   // 深度合法性
   let depthOk = true;
   for (const t of [...targetTransforms, ...initialTransforms]) {
@@ -204,10 +229,17 @@ for (const level of LEVELS) {
   console.log('\n[数值检查]');
   const rows: Array<[string, string, boolean]> = [
     ['目标状态 IoU', fmt(iouSolved), iouSolved > 0.999],
-    ['初始状态 IoU', fmt(iouInitial), iouInitial < level.matchThreshold - 0.15],
-    ['粗对齐 IoU(±0.12)', fmt(iouCoarse), iouCoarse >= level.matchThreshold],
-    ['精对齐 IoU(±0.05)', fmt(iouFine), iouFine >= level.excellentThreshold],
-    ['通关 / 优秀阈值', `${fmt(level.matchThreshold)} / ${fmt(level.excellentThreshold)}`, true],
+    ['初始状态 IoU', fmt(iouInitial), iouInitial < level.matchThreshold - 0.2],
+    ['粗对齐 IoU(±0.12)', fmt(iouCoarse), iouCoarse < level.matchThreshold],
+    ['精对齐 IoU(±0.05)', fmt(iouFine), iouFine >= level.matchThreshold],
+    ['精对齐 ≥ 大师阈值', fmt(iouFine), iouFine >= level.masterThreshold],
+    ['离散控件可达 IoU', fmt(iouGrid), iouGrid >= level.matchThreshold],
+    [
+      '通关 / 优秀 / 大师',
+      `${fmt(level.matchThreshold)} / ${fmt(level.excellentThreshold)} / ${fmt(level.masterThreshold)}`,
+      level.matchThreshold < level.excellentThreshold &&
+        level.excellentThreshold <= level.masterThreshold,
+    ],
     ['目标影子面积(px)', String(area(targetMask)), area(targetMask) > 500],
     ['深度合法性', depthOk ? 'OK' : '违规', depthOk],
     ['目标贴边', touchingEdge ? '是' : '否', !touchingEdge],

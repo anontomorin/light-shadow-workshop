@@ -5,9 +5,11 @@
  *   1. 页面无 JS 异常；
  *   2. WebGL 场景正常初始化（未落到降级错误页）；
  *   3. 标题页 → 关卡页 → 游戏页的流程可走通；
- *   4. 真实鼠标拖动会改变物体位置并实时刷新匹配度；
- *   5. 目标状态能够真正触发通关（走完整投影 + IoU 校验）；
- *   6. 六个关卡都能进入并渲染。
+ *   4. 观看视角可切换（预设 / 滑杆 / 越界夹紧 / 复位）；
+ *   5. 真实鼠标拖动会改变物体位置并实时刷新匹配度；
+ *   6. 目标状态能够真正触发通关（走完整投影 + IoU 校验，且需连续 3 次达标）；
+ *   7. 六个关卡都能进入并渲染；
+ *   8. 自由实验室可进入、添加 / 拖动 / 删除 / 重置物体、切换视角并返回。
  *
  * 运行：node scripts/e2e-check.mjs   （需要先启动 npm run dev）
  */
@@ -206,6 +208,72 @@ async function main() {
   check('关卡物体已加载', shadowMesh === 1, `物体数=${shadowMesh}`);
   await screenshot('03-level1-initial');
 
+  // ── 3b. 观看视角 ────────────────────────────────────────
+  console.log('\n[3b] 观看视角');
+  /** 按滑杆标签设置数值（避免依赖 DOM 顺序） */
+  const setSliderByLabel = (label, value) =>
+    evaluate(
+      `(() => {
+        const row = [...document.querySelectorAll('.slider-row')].find(
+          (r) => r.querySelector('label') && r.querySelector('label').textContent.trim() === ${JSON.stringify(label)},
+        );
+        if (!row) return null;
+        const input = row.querySelector('input[type=range]');
+        input.value = String(${value});
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        return Number(input.value);
+      })()`,
+    );
+
+  const view0 = await evaluate(`window.__lightShadow.getView()`);
+  check(
+    '取得默认视角',
+    !!view0 && view0.distance > 10,
+    view0
+      ? `水平 ${view0.azimuth.toFixed(1)}° / 俯仰 ${view0.elevation.toFixed(1)}° / 距离 ${view0.distance.toFixed(1)}`
+      : 'null',
+  );
+
+  await evaluate(
+    `(() => { const b = [...document.querySelectorAll('.preset-group .btn')].find(x => x.textContent.trim() === '正视'); if (b) b.click(); })()`,
+  );
+  await sleep(400);
+  await waitFrames(6);
+  const viewFront = await evaluate(`window.__lightShadow.getView()`);
+  check('预设视角可切换到正视', Math.abs(viewFront.azimuth) < 0.6, `水平角=${viewFront.azimuth.toFixed(2)}°`);
+  await screenshot('03b-view-front');
+
+  const clamped = await evaluate(
+    `window.__lightShadow.setView({ azimuth: 999, elevation: -50, distance: 1 })`,
+  );
+  check(
+    '越界视角被夹紧在合法范围',
+    Math.abs(clamped.azimuth - 80) < 0.01 &&
+      Math.abs(clamped.elevation - 8) < 0.01 &&
+      Math.abs(clamped.distance - 13) < 0.01,
+    `水平 ${clamped.azimuth}° / 俯仰 ${clamped.elevation}° / 距离 ${clamped.distance}`,
+  );
+
+  const sliderValue = await setSliderByLabel('水平角', -20);
+  await sleep(400);
+  const viewSlider = await evaluate(`window.__lightShadow.getView()`);
+  check(
+    '视角滑杆可改变水平角',
+    sliderValue !== null && Math.abs(viewSlider.azimuth - -20) < 1.5,
+    `滑杆=${sliderValue} → 水平角=${viewSlider.azimuth.toFixed(2)}°`,
+  );
+
+  await evaluate(
+    `(() => { const b = [...document.querySelectorAll('.btn')].find(x => x.textContent.trim() === '复位视角'); if (b) b.click(); })()`,
+  );
+  await sleep(400);
+  const viewBack = await evaluate(`window.__lightShadow.getView()`);
+  check(
+    '复位视角回到默认机位',
+    Math.abs(viewBack.azimuth - view0.azimuth) < 1 && Math.abs(viewBack.distance - view0.distance) < 0.5,
+    `水平角=${viewBack.azimuth.toFixed(2)}°`,
+  );
+
   // ── 4. 真实鼠标拖动 ─────────────────────────────────────
   console.log('\n[4] 真实鼠标拖动');
   const objId = state1.objects[0].id;
@@ -340,6 +408,100 @@ async function main() {
   const lab = await evaluate(`window.__lightShadow.getState().unlocked === 6`);
   check('全部关卡通关记录已保存', lab === true);
   await screenshot('08-after-reload');
+
+  // ── 8b. 自由实验室 ──────────────────────────────────────
+  console.log('\n[8b] 自由实验室');
+  await evaluate(
+    `(() => { const b = [...document.querySelectorAll('.title-actions .btn')].find(x => x.textContent.includes('自由实验室')); if (b) b.click(); })()`,
+  );
+  await sleep(1800);
+  await waitFrames(20);
+  check('可从标题页进入自由实验室', (await evaluate(`!!document.querySelector('.lab-screen')`)) === true);
+  check(
+    '实验室三维画布已挂载',
+    (await evaluate(`!!document.querySelector('.lab-screen canvas')`)) === true,
+  );
+  const labState0 = await evaluate(`window.__lightShadow.getLabState()`);
+  check('实验室默认包含 3 个物体', labState0?.count === 3, `count=${labState0?.count}`);
+  const labShadow0 = await evaluate(`window.__lightShadow.wallShadowCount()`);
+  check('实验室已在墙面绘制影子', labShadow0 >= 3, `墙面影子图元=${labShadow0}`);
+  await screenshot('09-lab');
+
+  // 添加几何体
+  await evaluate(
+    `(() => { const b = [...document.querySelectorAll('.lab-add-grid .btn')].find(x => x.textContent.includes('六边')); if (b) b.click(); })()`,
+  );
+  await sleep(700);
+  await waitFrames(8);
+  const labState1 = await evaluate(`window.__lightShadow.getLabState()`);
+  check('添加几何体生效', labState1?.count === 4, `count=${labState1?.count}`);
+
+  // 真实鼠标拖动实验室物体
+  const labDragId = labState1.selected;
+  const labBefore = labState1.objects.find((o) => o.id === labDragId)?.transform;
+  const lp = await evaluate(`window.__lightShadow.screenPos(${JSON.stringify(labDragId)})`);
+  check('取得实验室物体的屏幕坐标', !!lp, lp ? `(${lp.x.toFixed(0)}, ${lp.y.toFixed(0)})` : 'null');
+  if (lp) {
+    await mouse('mousePressed', lp.x, lp.y);
+    await sleep(150);
+    for (let i = 1; i <= 12; i++) {
+      await mouse('mouseMoved', lp.x - i * 7, lp.y + i * 2);
+      await sleep(26);
+    }
+    await mouse('mouseReleased', lp.x - 12 * 7, lp.y + 12 * 2);
+    await sleep(600);
+    await waitFrames(8);
+    const labState2 = await evaluate(`window.__lightShadow.getLabState()`);
+    const labAfter = labState2.objects.find((o) => o.id === labDragId)?.transform;
+    check(
+      '实验室可拖动物体',
+      !!labBefore && !!labAfter && (Math.abs(labAfter.x - labBefore.x) > 0.05 || Math.abs(labAfter.y - labBefore.y) > 0.05),
+      labBefore && labAfter
+        ? `x: ${labBefore.x.toFixed(2)} → ${labAfter.x.toFixed(2)}, y: ${labBefore.y.toFixed(2)} → ${labAfter.y.toFixed(2)}`
+        : '缺少变换数据',
+    );
+  }
+
+  // 实验室同样可以切换观看视角
+  await evaluate(
+    `(() => { const b = [...document.querySelectorAll('.lab-screen .preset-group .btn')].find(x => x.textContent.trim() === '俯视'); if (b) b.click(); })()`,
+  );
+  await sleep(500);
+  await waitFrames(6);
+  const labView = await evaluate(`window.__lightShadow.getView()`);
+  check('实验室可切换观看视角', labView.elevation > 50, `俯仰角=${labView.elevation.toFixed(1)}°`);
+  await screenshot('10-lab-view');
+
+  // 删除选中物体
+  await evaluate(
+    `(() => { const b = [...document.querySelectorAll('.lab-screen .side-panel .btn')].find(x => x.textContent.includes('删除选中物体')); if (b) b.click(); })()`,
+  );
+  await sleep(600);
+  await waitFrames(8);
+  const labState3 = await evaluate(`window.__lightShadow.getLabState()`);
+  check('删除几何体生效', labState3?.count === 3, `count=${labState3?.count}`);
+
+  // 重置场景
+  await evaluate(
+    `(() => { const b = [...document.querySelectorAll('.lab-screen .game-dock .btn')].find(x => x.textContent.includes('重置场景')); if (b) b.click(); })()`,
+  );
+  await sleep(700);
+  await waitFrames(8);
+  const labState4 = await evaluate(`window.__lightShadow.getLabState()`);
+  check('重置场景恢复默认 3 个物体', labState4?.count === 3, `count=${labState4?.count}`);
+  const labShadow1 = await evaluate(`window.__lightShadow.wallShadowCount()`);
+  check('重置后墙面影子重新绘制', labShadow1 >= 3, `墙面影子图元=${labShadow1}`);
+  await screenshot('11-lab-reset');
+
+  // 返回标题页
+  await evaluate(
+    `(() => { const b = [...document.querySelectorAll('.lab-screen .game-dock .btn')].find(x => x.textContent.includes('返回标题页')); if (b) b.click(); })()`,
+  );
+  await sleep(800);
+  check(
+    '可从自由实验室返回标题页',
+    (await evaluate(`!!document.querySelector('.title-main')`)) === true,
+  );
 
   // ── 9. 控制台错误 ───────────────────────────────────────
   console.log('\n[9] 控制台');

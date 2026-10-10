@@ -10,7 +10,7 @@ export interface TitleHandlers {
 
 export class TitleScreen {
   readonly root: HTMLElement;
-  private labBtn: HTMLElement | null = null;
+  private labBtn: HTMLButtonElement;
 
   constructor(handlers: TitleHandlers, version = 'v1.0.0') {
     const decor = h('div', { class: 'title-decor' }, [
@@ -22,10 +22,11 @@ export class TitleScreen {
     ]);
 
     const labButton = h('button', {
-      class: 'btn btn-ghost hidden',
+      class: 'btn btn-lg btn-lab',
       text: '自由实验室',
+      title: '不设目标，自由摆放几何体与光源',
       onclick: () => handlers.onLab?.(),
-    });
+    }) as HTMLButtonElement;
     this.labBtn = labButton;
 
     const content = h('div', { class: 'title-content' }, [
@@ -50,7 +51,11 @@ export class TitleScreen {
     ]);
   }
 
+  /**
+   * 自由实验室始终可用（它是一个不设目标的沙盒）。
+   * 参数仅用于在全部关卡通关后给按钮加一个完成标记。
+   */
   setLabUnlocked(v: boolean): void {
-    this.labBtn?.classList.toggle('hidden', !v);
+    this.labBtn.classList.toggle('lab-ready', v);
   }
 }

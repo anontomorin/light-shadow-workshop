@@ -495,3 +495,51 @@ input[type='range']:disabled {
 .rotate-group .btn {
   flex: 1;
 }
+
+/* 视角预设按钮组 */
+.preset-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.preset-group .btn {
+  flex: 1 1 auto;
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+/* 自由实验室：添加几何体的按钮网格 */
+.lab-add-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.lab-add-grid .btn {
+  padding: 6px 4px;
+  font-size: 12px;
+}
+
+/* 标题页的实验室入口：全部通关后加一个完成标记 */
+.btn-lab {
+  position: relative;
+}
+
+.btn-lab.lab-ready::after {
+  content: '★';
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #4a3210;
+  font-size: 11px;
+  box-shadow: var(--shadow-sm);
+}

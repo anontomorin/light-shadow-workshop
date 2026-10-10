@@ -96,6 +96,11 @@ export class ProjectionRenderer {
     this.highlight = duration;
   }
 
+  /** 当前影子在墙面上的图元数量（供自动化测试确认影子确实被绘制） */
+  shadowMeshCount(): number {
+    return this.shadowGroup.children.length;
+  }
+
   update(dt: number): void {
     if (this.highlight > 0) {
       this.highlight = Math.max(0, this.highlight - dt);
