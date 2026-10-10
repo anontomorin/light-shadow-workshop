@@ -85,10 +85,11 @@ async function mouse(type, x, y, button = 'left') {
 }
 
 /**
- * 读取画布像素并统计"影子主题色"的分布，用于验证重叠区域颜色均匀。
+ * 读取画布像素并统计颜色分布。
  * 通过 CDP 直接抓画布位图，避免受页面上其它 DOM 干扰。
+ * 返回影子主题色（#31455a 附近）与目标描边色（#1f7f96 附近）的像素数。
  */
-async function shadowPixelStats(x0, y0, x1, y1) {
+async function wallPixelStats(x0, y0, x1, y1) {
   const res = await send('Page.captureScreenshot', {
     format: 'png',
     clip: { x: x0, y: y0, width: x1 - x0, height: y1 - y0, scale: 1 },
@@ -104,18 +105,21 @@ async function shadowPixelStats(x0, y0, x1, y1) {
       const ctx = c.getContext('2d');
       ctx.drawImage(bmp, 0, 0);
       const d = ctx.getImageData(0, 0, bmp.width, bmp.height).data;
-      // 影子主题色 #31455a → 大致落在 (49, 69, 90) 附近
-      const near = (r, g, b) => Math.abs(r - 49) < 46 && Math.abs(g - 69) < 46 && Math.abs(b - 90) < 46 && b > r;
+      // 影子主题色 #31455a → (49, 69, 90)；目标描边 #1f7f96 → (31, 127, 150)
+      const nearShadow = (r, g, b) => Math.abs(r - 49) < 46 && Math.abs(g - 69) < 46 && Math.abs(b - 90) < 46 && b > r;
+      const nearStroke = (r, g, b) => Math.abs(r - 31) < 30 && Math.abs(g - 127) < 30 && Math.abs(b - 150) < 30;
       const buckets = new Map();
-      let count = 0;
+      let shadowCount = 0;
+      let strokeCount = 0;
       for (let i = 0; i < d.length; i += 4) {
         const r = d[i], g = d[i + 1], b = d[i + 2];
-        if (!near(r, g, b)) continue;
-        count++;
+        if (nearStroke(r, g, b)) strokeCount++;
+        if (!nearShadow(r, g, b)) continue;
+        shadowCount++;
         const key = (r >> 2) + ',' + (g >> 2) + ',' + (b >> 2);
         buckets.set(key, (buckets.get(key) || 0) + 1);
       }
-      return { count, distinct: buckets.size };
+      return { count: shadowCount, distinct: buckets.size, strokeCount };
     })`,
     `data:image/png;base64,${res.data}`,
   );
@@ -435,6 +439,28 @@ async function main() {
   );
   check('真实鼠标操作可触发通关', !!dragModal, dragModal ?? '未弹出结算');
   await screenshot('04-after-drag');
+  await evaluate(
+    `(() => { const b = [...document.querySelectorAll('.modal .btn')].find(x => x.textContent.includes('重玩')); if (b) b.click(); })()`,
+  );
+  await sleep(1400);
+
+  // ── 4b. 影子必须盖在示例图形上方 ────────────────────────
+  console.log('\n[4b] 影子图层在最上方');
+  // 说明：不要用像素采样来验证这一条。物体位于相机与墙之间，会遮住自己
+  // 投射在墙上的影子，从默认机位根本采不到"影子压住描边"的像素。
+  // 真正决定遮挡关系的是**渲染顺序 + z 值**，直接断言这个即可，稳定且精确。
+  const layers = await evaluate(`window.__lightShadow.layerOrder()`);
+  check(
+    '影子绘制顺序在示例填充与描边之后',
+    layers && layers.shadow > layers.targetStroke && layers.shadow > layers.targetFill,
+    layers ? `填充#${layers.targetFill} → 描边#${layers.targetStroke} → 影子#${layers.shadow}` : 'null',
+  );
+  check(
+    '影子确实位于最上层（z 值与绘制顺序同时成立）',
+    layers?.shadowIsTop === true,
+    layers?.shadowIsTop ? '影子在最上层' : '影子未在最上层',
+  );
+  await screenshot('04b-shadow-on-top');
 
   // ── 5. 重置与提示 ───────────────────────────────────────
   console.log('\n[5] 重置与提示系统');
@@ -554,7 +580,7 @@ async function main() {
   const stageRect = await evaluate(
     `(() => { const r = document.querySelector('.lab-screen canvas').getBoundingClientRect(); return { left: r.left, top: r.top, width: r.width, height: r.height }; })()`,
   );
-  const probe = await shadowPixelStats(
+  const probe = await wallPixelStats(
     Math.round(stageRect.left + stageRect.width * 0.2),
     Math.round(stageRect.top + stageRect.height * 0.15),
     Math.round(stageRect.left + stageRect.width * 0.8),

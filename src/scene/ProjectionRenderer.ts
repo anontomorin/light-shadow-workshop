@@ -16,12 +16,16 @@ import { WALL_Z, type Point2 } from '../projection/Projector';
  *   颜色完全均匀，看不出任何重叠痕迹。
  *
  * 层次顺序（z 越大越靠前）：
- *   目标填充 WALL_Z + 0.01 → 当前影子 WALL_Z + 0.02 → 目标描边 WALL_Z + 0.05
+ *   目标填充 WALL_Z + 0.01 → 目标描边 WALL_Z + 0.02 → 当前影子 WALL_Z + 0.04
+ *
+ * 影子刻意放在**最上层**：它代表玩家此刻的实际成果，压住示例图形后
+ * 玩家看到的形状就是自己摆出来的结果。示例的淡填充与轮廓线都在影子之下，
+ * 因此影子边缘与目标轮廓的重合程度才是判断"贴没贴合"的依据。
  */
 
 const Z_TARGET_FILL = WALL_Z + 0.01;
-const Z_SHADOW = WALL_Z + 0.02;
-const Z_TARGET_STROKE = WALL_Z + 0.05;
+const Z_TARGET_STROKE = WALL_Z + 0.02;
+const Z_SHADOW = WALL_Z + 0.04;
 
 /** 单次绘制需要 2 个模板位（0 基准一个、1 基准一个），用位掩码彼此隔离 */
 const GROUP_TARGET_FILL = 1;
@@ -138,12 +142,14 @@ export class ProjectionRenderer {
     this.targetFill = new THREE.Mesh(this.targetFillGeometry, this.targetFillMaterial);
     this.shadowFill = new THREE.Mesh(this.shadowFillGeometry, this.shadowMaterial);
 
+    // 加入顺序 = 绘制顺序（同 depth 下按序覆盖），最终以 z 值决定前后：
+    // 目标填充 → 目标描边 → 影子，影子在最上层
     this.group.add(
-      this.shadowGroup,
-      this.shadowFill,
       this.targetFillGroup,
       this.targetFill,
       this.targetStrokeGroup,
+      this.shadowGroup,
+      this.shadowFill,
     );
   }
 
@@ -198,6 +204,30 @@ export class ProjectionRenderer {
   /** 当前影子在墙面上的图元数量（供自动化测试确认影子确实被绘制） */
   shadowMeshCount(): number {
     return this.shadowGroup.children.length;
+  }
+
+  /**
+   * 图层层级快照（供自动化测试断言"影子画在示例图形之上"）。
+   * z 越大越靠前；同 z 时按加入顺序后来者居上。
+   */
+  layerOrder(): { targetFill: number; targetStroke: number; shadow: number; shadowIsTop: boolean } {
+    const shadowGroupZ = Z_SHADOW;
+    const order = this.group.children.map((c) => c);
+    const indexOf = (obj: THREE.Object3D) => order.indexOf(obj);
+    const shadowFillIdx = indexOf(this.shadowFill);
+    const strokeIdx = indexOf(this.targetStrokeGroup);
+    const fillIdx = indexOf(this.targetFill);
+    return {
+      targetFill: fillIdx,
+      targetStroke: strokeIdx,
+      shadow: shadowFillIdx,
+      // 影子既在绘制顺序上最后，z 值也最大，才会真正盖住示例
+      shadowIsTop:
+        shadowFillIdx > strokeIdx &&
+        shadowFillIdx > fillIdx &&
+        shadowGroupZ > Z_TARGET_STROKE &&
+        Z_TARGET_STROKE > Z_TARGET_FILL,
+    };
   }
 
   update(dt: number): void {

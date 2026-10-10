@@ -277,6 +277,21 @@ export class GameApp {
       },
       /** 测试用：墙面上的当前影子图元数量 */
       wallShadowCount: () => this.studio.projection.shadowMeshCount(),
+      /**
+       * 测试用：返回"影子与目标轮廓重合处"在屏幕上的像素坐标。
+       * 取目标多边形顶点的重心（退回质心），用于精确采样该区域的像素颜色，
+       * 判断影子是否盖住了示例描边。
+       */
+      overlapScreenPos: () => {
+        const polys = this.levelManager.targetPolygons;
+        if (!polys.length || !polys[0].length) return null;
+        const pts = polys[0];
+        const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
+        const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
+        return this.sceneManager.worldToScreen({ x: cx, y: cy, z: 0 });
+      },
+      /** 测试用：墙面图层顺序，用于断言影子画在示例图形之上 */
+      layerOrder: () => this.studio.projection.layerOrder(),
       /** 测试用：返回某个物体目标位置对应的屏幕像素坐标 */
       targetScreenPos: (id: string) => {
         const obj = this.currentLevel?.objects.find((o) => o.id === id);
