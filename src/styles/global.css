@@ -1,0 +1,204 @@
+/* ============================================================
+   全局样式：设计变量、重置、通用排版
+   风格关键词：留白、柔和日光、几何造型、轻盈、秩序感
+   ============================================================ */
+
+:root {
+  /* 背景与面 */
+  --bg: #f4eee2;
+  --bg-deep: #eae2d2;
+  --surface: #fffcf6;
+  --surface-2: #f8f2e7;
+  --surface-3: #f1e9db;
+
+  /* 文字 */
+  --ink: #2c3a45;
+  --ink-soft: #64748b;
+  --ink-faint: #97a3ad;
+
+  /* 主色与强调色 */
+  --primary: #2f8fa8;
+  --primary-dark: #1f7f96;
+  --primary-soft: #d9edf2;
+  --accent: #e8a33d;
+  --accent-soft: #fdeccc;
+  --success: #4f9d69;
+  --danger: #c96a5a;
+
+  /* 线框与阴影 */
+  --line: #e3d9c7;
+  --line-strong: #cfc3ad;
+  --shadow-sm: 0 1px 2px rgba(44, 58, 69, 0.06);
+  --shadow-md: 0 6px 18px rgba(44, 58, 69, 0.1);
+  --shadow-lg: 0 18px 48px rgba(44, 58, 69, 0.16);
+
+  --radius-sm: 8px;
+  --radius: 14px;
+  --radius-lg: 22px;
+
+  --font: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', system-ui,
+    -apple-system, 'Helvetica Neue', Arial, sans-serif;
+
+  --dur-fast: 140ms;
+  --dur: 240ms;
+  --dur-slow: 420ms;
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  font-family: var(--font);
+  color: var(--ink);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+#app {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* 焦点可见性：键盘可访问性 */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.studio-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+/* ---------- 致命错误页（WebGL 不可用等） ---------- */
+.fatal-error {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px;
+  text-align: center;
+  background: var(--bg);
+  color: var(--ink);
+  z-index: 999;
+}
+
+.fatal-error h1 {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.fatal-error p {
+  max-width: 520px;
+  line-height: 1.7;
+  color: var(--ink-soft);
+}
+
+/* ---------- 通用工具类 ---------- */
+.muted {
+  color: var(--ink-soft);
+}
+
+.tiny {
+  font-size: 12px;
+}
+
+.small {
+  font-size: 13px;
+}
+
+.mono {
+  font-variant-numeric: tabular-nums;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* 淡入动画 */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes soft-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

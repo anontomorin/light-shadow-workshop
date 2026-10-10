@@ -1,0 +1,507 @@
+/* ============================================================
+   各屏幕的布局
+   ============================================================ */
+
+.screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  animation: fade-in var(--dur) var(--ease);
+}
+
+/* ---------------- 标题页 ---------------- */
+.title-screen {
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: radial-gradient(120% 90% at 50% 0%, #fffaf0 0%, var(--bg) 55%, var(--bg-deep) 100%);
+}
+
+/* 背景装饰：一盏灯 + 漂浮几何体 + 缓慢移动的影子（纯 CSS，无外部素材） */
+.title-decor {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.title-lamp {
+  position: absolute;
+  top: -70px;
+  left: 50%;
+  width: 260px;
+  height: 320px;
+  transform: translateX(-50%);
+  background: radial-gradient(60% 55% at 50% 12%, rgba(255, 216, 150, 0.95), rgba(255, 216, 150, 0) 70%);
+}
+
+.title-lamp::after {
+  content: '';
+  position: absolute;
+  top: 46px;
+  left: 50%;
+  width: 18px;
+  height: 18px;
+  margin-left: -9px;
+  border-radius: 50%;
+  background: #ffd79a;
+  box-shadow: 0 0 40px 18px rgba(255, 206, 130, 0.55);
+}
+
+.deco-shape {
+  position: absolute;
+  filter: drop-shadow(14px 18px 0 rgba(47, 69, 88, 0.13));
+  animation: float-y 9s ease-in-out infinite;
+}
+
+.deco-square {
+  width: 64px;
+  height: 64px;
+  border-radius: 10px;
+  background: #e8a33d;
+  left: 14%;
+  top: 58%;
+  animation-delay: -1s;
+}
+
+.deco-circle {
+  width: 74px;
+  height: 74px;
+  border-radius: 50%;
+  background: #4aa3c7;
+  right: 16%;
+  top: 48%;
+  animation-delay: -3.4s;
+}
+
+.deco-tri {
+  width: 0;
+  height: 0;
+  border-left: 38px solid transparent;
+  border-right: 38px solid transparent;
+  border-bottom: 64px solid #6fae5a;
+  left: 24%;
+  top: 26%;
+  animation-delay: -5.2s;
+}
+
+.deco-diamond {
+  width: 58px;
+  height: 58px;
+  background: #b98bd6;
+  right: 22%;
+  top: 22%;
+  transform: rotate(45deg);
+  border-radius: 8px;
+  animation-delay: -6.8s;
+}
+
+@keyframes float-y {
+  0%,
+  100% {
+    transform: translateY(0) rotate(var(--rot, 0deg));
+  }
+  50% {
+    transform: translateY(-18px) rotate(var(--rot, 0deg));
+  }
+}
+
+.deco-diamond {
+  --rot: 45deg;
+}
+
+.title-content {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  padding: 32px;
+  animation: fade-in-up var(--dur-slow) var(--ease);
+}
+
+.title-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 14px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--ink-soft);
+  letter-spacing: 0.14em;
+}
+
+.title-main {
+  margin-top: 22px;
+  font-size: clamp(42px, 7vw, 68px);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--ink);
+}
+
+.title-sub {
+  margin-top: 6px;
+  font-size: clamp(16px, 2.2vw, 22px);
+  font-weight: 400;
+  letter-spacing: 0.34em;
+  color: var(--primary);
+}
+
+.title-desc {
+  margin-top: 20px;
+  font-size: 15px;
+  line-height: 1.8;
+  color: var(--ink-soft);
+}
+
+.title-actions {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  margin-top: 34px;
+  flex-wrap: wrap;
+}
+
+.title-footer {
+  position: absolute;
+  right: 22px;
+  bottom: 18px;
+  font-size: 12px;
+  color: var(--ink-faint);
+  letter-spacing: 0.06em;
+}
+
+/* ---------------- 关卡选择页 ---------------- */
+.level-screen {
+  padding: 40px clamp(24px, 6vw, 72px);
+  overflow-y: auto;
+  background: var(--bg);
+}
+
+.screen-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+}
+
+.screen-header h1 {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.screen-header .sub {
+  margin-top: 6px;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
+.level-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 18px;
+  padding-bottom: 40px;
+}
+
+.level-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  text-align: left;
+  transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
+  overflow: hidden;
+}
+
+.level-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--primary);
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease);
+}
+
+.level-card:hover:not(.locked) {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--primary);
+}
+
+.level-card:hover:not(.locked)::before {
+  opacity: 1;
+}
+
+.level-card.locked {
+  background: var(--surface-2);
+  color: var(--ink-faint);
+  cursor: not-allowed;
+}
+
+.level-card .lv-no {
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  color: var(--ink-faint);
+}
+
+.level-card .lv-title {
+  font-size: 19px;
+  font-weight: 600;
+}
+
+.level-card .lv-desc {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  flex: 1;
+}
+
+.level-card .lv-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* ---------------- 游戏页 ---------------- */
+.game-screen {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  grid-template-rows: 1fr auto;
+  background: var(--bg);
+}
+
+.stage-wrap {
+  position: relative;
+  grid-column: 1;
+  grid-row: 1;
+  overflow: hidden;
+}
+
+.stage {
+  position: absolute;
+  inset: 0;
+}
+
+/* 左上角的返回 / 关卡名 / 暂停 */
+.game-topbar {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.game-topbar > * {
+  pointer-events: auto;
+}
+
+.topbar-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: rgba(255, 252, 246, 0.9);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(6px);
+}
+
+.topbar-info .lv {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  color: var(--ink-faint);
+}
+
+.topbar-info .name {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.topbar-spacer {
+  flex: 1;
+}
+
+/* 教学目标条 */
+.tutorial-bar {
+  position: absolute;
+  top: 74px;
+  left: 16px;
+  max-width: min(460px, 60%);
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  background: rgba(255, 252, 246, 0.92);
+  border: 1px solid var(--line);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  z-index: 9;
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(6px);
+}
+
+/* 底部操作坞 */
+.game-dock {
+  grid-column: 1;
+  grid-row: 2;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+  flex-wrap: wrap;
+}
+
+.dock-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+/* 右侧控制面板 */
+.side-panel {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border-left: 1px solid var(--line);
+  background: var(--surface);
+  overflow-y: auto;
+}
+
+.side-section {
+  padding: 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+}
+
+.side-section.disabled {
+  opacity: 0.5;
+}
+
+.side-section h3 {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+  margin-bottom: 10px;
+}
+
+.side-empty {
+  padding: 12px;
+  font-size: 13px;
+  color: var(--ink-faint);
+  line-height: 1.6;
+}
+
+.selected-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.selected-head .dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+.readout-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px 10px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.readout-grid .v {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.keyhint {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--ink-faint);
+  line-height: 1.8;
+}
+
+/* 提示条（面板内） */
+.side-hint {
+  font-size: 13px;
+  line-height: 1.7;
+  color: #7a5316;
+}
+
+/* ---------------- 自由实验室 ---------------- */
+.lab-screen {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  background: var(--bg);
+}
+
+/* ---------------- 响应式：窄窗口改为上下布局 ---------------- */
+@media (max-width: 1024px) {
+  .game-screen {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto auto;
+  }
+
+  .stage-wrap {
+    grid-column: 1;
+    grid-row: 1;
+    min-height: 320px;
+  }
+
+  .side-panel {
+    grid-column: 1;
+    grid-row: 2;
+    flex-direction: row;
+    flex-wrap: wrap;
+    max-height: 210px;
+    border-left: none;
+    border-top: 1px solid var(--line);
+  }
+
+  .side-panel > * {
+    flex: 1 1 240px;
+  }
+
+  .game-dock {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  .lab-screen {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+  }
+}
