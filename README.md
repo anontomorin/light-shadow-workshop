@@ -201,6 +201,12 @@ src/
 - **对生产构建产物复测**：`npm run preview` 后
   `E2E_URL=http://localhost:4173 node scripts/e2e-check.mjs` 同样 **34 / 34 通过**，
   证明交付的 `dist/` 与开发模式行为一致
+- **对线上 GitHub Pages 复测**：
+  `E2E_URL=https://anontomorin.github.io/light-shadow-workshop/ E2E_BOOT_WAIT=20000 node scripts/e2e-check.mjs`
+  同样 **34 / 34 通过**，证明线上链接可以完整游玩（含真实鼠标拖动通关与六关遍历）
+
+> `E2E_BOOT_WAIT` / `E2E_RELOAD_WAIT` 用于放宽首屏等待，默认 2500 / 2400 毫秒，
+> 适合本地；访问线上站点时受网络影响需要调大。
 
 ### 5.2 核心功能截图（`docs/shots/`）
 

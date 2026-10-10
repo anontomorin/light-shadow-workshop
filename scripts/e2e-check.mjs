@@ -19,6 +19,9 @@ import { tmpdir } from 'node:os';
 const URL_BASE = process.env.E2E_URL ?? 'http://localhost:5173';
 const PORT = 9333;
 const OUT_DIR = join(process.cwd(), 'docs', 'shots');
+/** 首屏等待：本地为毫秒级，线上经代理加载 560KB 的包可能需要十几秒 */
+const BOOT_WAIT = Number(process.env.E2E_BOOT_WAIT ?? 2500);
+const RELOAD_WAIT = Number(process.env.E2E_RELOAD_WAIT ?? 2400);
 const CHROME_CANDIDATES = [
   'C:/Program Files/Google/Chrome/Application/chrome.exe',
   'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
@@ -166,7 +169,7 @@ async function main() {
   // ── 1. 打开页面 ──────────────────────────────────────────
   console.log('\n[1] 打开页面');
   await send('Page.navigate', { url: URL_BASE });
-  await sleep(2500);
+  await sleep(BOOT_WAIT);
   await waitFrames(20);
 
   const hasTitle = await evaluate(`!!document.querySelector('.title-main')`);
@@ -330,7 +333,7 @@ async function main() {
   // ── 8. 刷新后存档恢复 ───────────────────────────────────
   console.log('\n[8] 存档与刷新');
   await send('Page.navigate', { url: URL_BASE });
-  await sleep(2400);
+  await sleep(RELOAD_WAIT);
   await waitFrames(10);
   const saved = await evaluate(`window.__lightShadow.getState()`);
   check('刷新后解锁进度保留', saved.unlocked === 6, `unlocked=${saved.unlocked}`);
