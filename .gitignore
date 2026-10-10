@@ -9,6 +9,9 @@ dist/
 *.local
 *.log
 
+# e2e 像素探针的临时截图
+docs/shots/_tmp-*.png
+
 # 编辑器 / 系统
 .vscode/*
 !.vscode/extensions.json

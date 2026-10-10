@@ -65,6 +65,43 @@ async function evaluate(expression) {
   return res.result?.value;
 }
 
+/**
+ * 轮询等待页面内表达式变为真值。
+ * 刷新/首次加载后应用需要一段时间才把 window.__lightShadow 挂上，
+ * 定长 sleep 在慢网络下不够可靠，故改为轮询直到就绪或超时。
+ */
+async function waitFor(expression, timeoutMs = 15000, intervalMs = 200) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      if (await evaluate(expression)) return true;
+    } catch {
+      /* 页面可能正在导航，忽略后重试 */
+    }
+    await sleep(intervalMs);
+  }
+  return false;
+}
+
+/**
+ * 把屏幕坐标夹到一个"UI 覆盖层之外"的安全拖动区。
+ *
+ * 舞台顶部叠着教程提示条（.tutorial-bar）、顶部栏（.game-topbar），
+ * 底部叠着操作坞（.game-dock）。用 screenPos() 算出的物体屏幕坐标可能正好
+ * 落在这些浮层上——此时鼠标事件被浮层吃掉，物体会"纹丝不动"，
+ * 表现为一段假失败（应用本身没有问题）。
+ * 因此拖动测试统一把起点夹进画布中段：y ∈ [150, 视口高 - 190]。
+ */
+async function safeStagePoint(x, y) {
+  const vp = await evaluate(`JSON.stringify({ w: innerWidth, h: innerHeight })`);
+  const { w, h } = JSON.parse(vp);
+  const padX = 40;
+  return {
+    x: Math.min(Math.max(x, padX), w - padX),
+    y: Math.min(Math.max(y, 150), h - 190),
+  };
+}
+
 async function screenshot(name) {
   const res = await send('Page.captureScreenshot', { format: 'png' });
   const file = join(OUT_DIR, `${name}.png`);
@@ -94,8 +131,8 @@ async function wallPixelStats(x0, y0, x1, y1) {
     format: 'png',
     clip: { x: x0, y: y0, width: x1 - x0, height: y1 - y0, scale: 1 },
   });
-  const file = join(OUT_DIR, '_tmp-probe.png');
-  writeFileSync(file, Buffer.from(res.data, 'base64'));
+  // PNG 只在内存里传给页面（data URL），不落盘：
+  // 临时文件一旦残留会被 git status 当作未跟踪文件，污染仓库。
   const stats = await evaluateWithPng(
     `(async (dataUrl) => {
       const blob = await (await fetch(dataUrl)).blob();
@@ -163,6 +200,10 @@ async function main() {
       '--window-size=1440,900',
       '--no-first-run',
       '--no-default-browser-check',
+      // 线上复测时禁用磁盘缓存：Pages 的 CDN 可能仍返回上一版 bundle，
+      // 导致"本地已改好但线上测出的还是旧行为"这种假失败。
+      '--disable-application-cache',
+      '--disable-http-cache',
       `--user-data-dir=${userDataDir}`,
       'about:blank',
     ],
@@ -227,6 +268,8 @@ async function main() {
   console.log('\n[1] 打开页面');
   await send('Page.navigate', { url: URL_BASE });
   await sleep(BOOT_WAIT);
+  const booted = await waitFor(`!!window.__lightShadow`, 25000);
+  check('应用启动并挂载调试接口', booted === true);
   await waitFrames(20);
 
   const hasTitle = await evaluate(`!!document.querySelector('.title-main')`);
@@ -401,10 +444,17 @@ async function main() {
   // ── 4. 真实鼠标拖动 ─────────────────────────────────────
   console.log('\n[4] 真实鼠标拖动');
   const objId = state1.objects[0].id;
-  const p0 = await evaluate(`window.__lightShadow.screenPos(${JSON.stringify(objId)})`);
+  const p0Raw = await evaluate(`window.__lightShadow.screenPos(${JSON.stringify(objId)})`);
   const pT = await evaluate(`window.__lightShadow.targetScreenPos(${JSON.stringify(objId)})`);
-  check('取得物体与目标的屏幕坐标', !!p0 && !!pT,
-    p0 && pT ? `物体(${p0.x.toFixed(0)}, ${p0.y.toFixed(0)}) → 目标(${pT.x.toFixed(0)}, ${pT.y.toFixed(0)})` : 'null');
+  check('取得物体与目标的屏幕坐标', !!p0Raw && !!pT,
+    p0Raw && pT ? `物体(${p0Raw.x.toFixed(0)}, ${p0Raw.y.toFixed(0)}) → 目标(${pT.x.toFixed(0)}, ${pT.y.toFixed(0)})` : 'null');
+
+  // screenPos 是纯数学投影，起点若落在教程提示条/顶部栏/操作坞上，
+  // 鼠标事件会被浮层截获，物体不动（假失败）。夹进安全拖动区。
+  const p0 = p0Raw ? await safeStagePoint(p0Raw.x, p0Raw.y) : null;
+  if (p0 && (p0.x !== p0Raw.x || p0.y !== p0Raw.y)) {
+    console.log(`  · 拖动起点已夹进安全区：(${p0Raw.x.toFixed(0)}, ${p0Raw.y.toFixed(0)}) → (${p0.x.toFixed(0)}, ${p0.y.toFixed(0)})`);
+  }
 
   const iouBeforeDrag = await evaluate(`window.__lightShadow.score()`);
   await mouse('mousePressed', p0.x, p0.y);
@@ -548,6 +598,11 @@ async function main() {
   console.log('\n[8] 存档与刷新');
   await send('Page.navigate', { url: URL_BASE });
   await sleep(RELOAD_WAIT);
+  // 刷新后必须等应用真正挂载完成再读状态：定长 sleep 在慢网络（如线上 Pages
+  // 首次拉取新 bundle）下会读到 window.__lightShadow 尚未赋值的一刻，
+  // 从而抛 "Cannot read properties of undefined" 的假失败。
+  const ready = await waitFor(`!!window.__lightShadow`, 20000);
+  check('刷新后应用重新挂载', ready === true);
   await waitFrames(10);
   const saved = await evaluate(`window.__lightShadow.getState()`);
   check('刷新后解锁进度保留', saved.unlocked === 6, `unlocked=${saved.unlocked}`);
@@ -613,9 +668,12 @@ async function main() {
   // 真实鼠标拖动实验室物体
   const labDragId = labState1.selected;
   const labBefore = labState1.objects.find((o) => o.id === labDragId)?.transform;
-  const lp = await evaluate(`window.__lightShadow.screenPos(${JSON.stringify(labDragId)})`);
-  check('取得实验室物体的屏幕坐标', !!lp, lp ? `(${lp.x.toFixed(0)}, ${lp.y.toFixed(0)})` : 'null');
-  if (lp) {
+  const lpRaw = await evaluate(`window.__lightShadow.screenPos(${JSON.stringify(labDragId)})`);
+  check('取得实验室物体的屏幕坐标', !!lpRaw, lpRaw ? `(${lpRaw.x.toFixed(0)}, ${lpRaw.y.toFixed(0)})` : 'null');
+  if (lpRaw) {
+    // screenPos 是纯数学投影，物体可能被教程提示条/顶部栏遮住，
+    // 起点必须夹进安全区，否则鼠标事件打在浮层上、物体不动（假失败）。
+    const lp = await safeStagePoint(lpRaw.x, lpRaw.y);
     await mouse('mousePressed', lp.x, lp.y);
     await sleep(150);
     for (let i = 1; i <= 12; i++) {
@@ -631,7 +689,7 @@ async function main() {
       '实验室可拖动物体',
       !!labBefore && !!labAfter && (Math.abs(labAfter.x - labBefore.x) > 0.05 || Math.abs(labAfter.y - labBefore.y) > 0.05),
       labBefore && labAfter
-        ? `x: ${labBefore.x.toFixed(2)} → ${labAfter.x.toFixed(2)}, y: ${labBefore.y.toFixed(2)} → ${labAfter.y.toFixed(2)}`
+        ? `起点(${lp.x.toFixed(0)}, ${lp.y.toFixed(0)}) · x: ${labBefore.x.toFixed(2)} → ${labAfter.x.toFixed(2)}, y: ${labBefore.y.toFixed(2)} → ${labAfter.y.toFixed(2)}`
         : '缺少变换数据',
     );
   }
@@ -668,8 +726,10 @@ async function main() {
   await screenshot('11-lab-reset');
 
   // 返回标题页
+  // 注意：实验室的返回按钮不在底部操作坞里，而是顶部栏左侧的图标按钮
+  // （LabHUD 里 .game-topbar 的 .btn-icon，aria-label="返回标题页"）。
   await evaluate(
-    `(() => { const b = [...document.querySelectorAll('.lab-screen .game-dock .btn')].find(x => x.textContent.includes('返回标题页')); if (b) b.click(); })()`,
+    `(() => { const b = document.querySelector('.lab-screen .game-topbar .btn-icon'); if (b) b.click(); })()`,
   );
   await sleep(800);
   check(
