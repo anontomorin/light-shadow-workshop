@@ -306,5 +306,5 @@ src/
 - 完整源代码（`src/`、`scripts/`）
 - 本 `README.md`
 - 可直接部署的静态构建产物 `dist/`（`npm run build` 生成）
-- 核心功能截图 `docs/shots/`（15 张，含视角与自由实验室）
+- 核心功能截图 `docs/shots/`（16 张，含视角与自由实验室；均为 GitHub Pages 线上站点实拍）
 - 关卡可解性验证脚本 `scripts/verify-levels.ts` 与端到端测试 `scripts/e2e-check.mjs`
