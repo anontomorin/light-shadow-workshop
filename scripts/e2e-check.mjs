@@ -498,7 +498,8 @@ async function main() {
   console.log('\n[4b] 影子图层在最上方');
   // 说明：不要用像素采样来验证这一条。物体位于相机与墙之间，会遮住自己
   // 投射在墙上的影子，从默认机位根本采不到"影子压住描边"的像素。
-  // 真正决定遮挡关系的是**渲染顺序 + z 值**，直接断言这个即可，稳定且精确。
+  // 真正决定遮挡关系的是 **renderOrder**（透明通道按相机距离排序，
+  // 距离并列时结果不稳定，只有 renderOrder 能钉死），直接断言它即可。
   const layers = await evaluate(`window.__lightShadow.layerOrder()`);
   check(
     '影子绘制顺序在示例填充与描边之后',
@@ -506,9 +507,14 @@ async function main() {
     layers ? `填充#${layers.targetFill} → 描边#${layers.targetStroke} → 影子#${layers.shadow}` : 'null',
   );
   check(
-    '影子确实位于最上层（z 值与绘制顺序同时成立）',
+    '影子确实位于最上层（renderOrder 与 z 值同时成立）',
     layers?.shadowIsTop === true,
     layers?.shadowIsTop ? '影子在最上层' : '影子未在最上层',
+  );
+  check(
+    '模板印章先于铺色平面绘制（否则并集铺色会失效）',
+    layers?.stampBeforeFill === true,
+    layers?.stampBeforeFill ? '印章在铺色之前' : '顺序有误',
   );
   await screenshot('04b-shadow-on-top');
 

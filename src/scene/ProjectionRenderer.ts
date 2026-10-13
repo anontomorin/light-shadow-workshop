@@ -15,17 +15,39 @@ import { WALL_Z, type Point2 } from '../projection/Projector';
  *   于是无论多少个多边形重叠，整块并集区域都只被填充**一次**，
  *   颜色完全均匀，看不出任何重叠痕迹。
  *
- * 层次顺序（z 越大越靠前）：
- *   目标填充 WALL_Z + 0.01 → 目标描边 WALL_Z + 0.02 → 当前影子 WALL_Z + 0.04
+ * 层次顺序（由 renderOrder 钉死，见下方 ORDER_* 常量）：
+ *   目标填充 → 目标描边 → 当前影子
  *
  * 影子刻意放在**最上层**：它代表玩家此刻的实际成果，压住示例图形后
  * 玩家看到的形状就是自己摆出来的结果。示例的淡填充与轮廓线都在影子之下，
  * 因此影子边缘与目标轮廓的重合程度才是判断"贴没贴合"的依据。
+ *
+ * 注意：**不要用 z 值或加入顺序来决定层序**。墙上这些 Mesh 都是透明材质、
+ * 贴在同一个平面上，three 的透明通道按相机距离排序，距离并列时结果不稳定，
+ * 层序会随机翻转。详见 ORDER_* 常量的注释。
  */
 
 const Z_TARGET_FILL = WALL_Z + 0.01;
 const Z_TARGET_STROKE = WALL_Z + 0.02;
 const Z_SHADOW = WALL_Z + 0.04;
+
+/**
+ * 显式绘制顺序（renderOrder）。这是本文件**唯一**能可靠决定层序的机制。
+ *
+ * 为什么不能只靠 z / 加入顺序：
+ *   three 会把 `transparent: true` 的对象放进**单独的透明通道**，按"离相机距离
+ *   从远到近"排序后再画，这个排序**完全无视** z 值与组内加入顺序。
+ *   而墙上的这些 Mesh 都是贴在同一个墙面上的薄片，z 只差 0.01~0.04，
+ *   换算成相机距离差不到 0.03，几个对象常常算出**完全相同的 camDist**。
+ *   距离并列时排序结果不稳定 → 谁最后画谁就压在上面 → 层序会随机翻转，
+ *   表现为"影子有时候在示例上面、有时候在下面"。
+ *
+ * renderOrder 的优先级高于深度排序，所以用它把顺序钉死。
+ * 数值必须与 z 的语义一致：小的先画（在下），大的后画（在上）。
+ */
+const ORDER_TARGET_FILL = 10;
+const ORDER_TARGET_STROKE = 20;
+const ORDER_SHADOW = 30;
 
 /** 单次绘制需要 2 个模板位（0 基准一个、1 基准一个），用位掩码彼此隔离 */
 const GROUP_TARGET_FILL = 1;
@@ -142,8 +164,16 @@ export class ProjectionRenderer {
     this.targetFill = new THREE.Mesh(this.targetFillGeometry, this.targetFillMaterial);
     this.shadowFill = new THREE.Mesh(this.shadowFillGeometry, this.shadowMaterial);
 
-    // 加入顺序 = 绘制顺序（同 depth 下按序覆盖），最终以 z 值决定前后：
-    // 目标填充 → 目标描边 → 影子，影子在最上层
+    // 层序由 renderOrder 钉死（见文件头 ORDER_* 常量说明）。
+    // 加入顺序仅作可读性表达，不承担正确性。
+    // 注意：印章（写模板）必须**先于**同组的铺色平面绘制，否则模板还没写好。
+    this.targetFillGroup.renderOrder = ORDER_TARGET_FILL;
+    this.shadowGroup.renderOrder = ORDER_SHADOW;
+    this.targetStrokeGroup.renderOrder = ORDER_TARGET_STROKE;
+    this.targetFill.renderOrder = ORDER_TARGET_FILL + 1;
+    this.shadowFill.renderOrder = ORDER_SHADOW + 1;
+
+    // 加入顺序 = 目标填充 → 目标描边 → 影子（可读性；真正的层序看 renderOrder）
     this.group.add(
       this.targetFillGroup,
       this.targetFill,
@@ -158,21 +188,32 @@ export class ProjectionRenderer {
    * 多个物体的影子重叠时会被合并为一块均匀的实心区域（模板并集）。
    */
   setCurrent(polygons: Point2[][]): void {
-    this.rebuildShapes(this.shadowGroup, polygons, Z_SHADOW, this.shadowStampMaterial);
+    this.rebuildShapes(this.shadowGroup, polygons, Z_SHADOW, this.shadowStampMaterial, ORDER_SHADOW);
   }
 
   /** 更新目标轮廓（淡填充 + 描边，固定在墙上，不随玩家操作变化） */
   setTarget(polygons: Point2[][]): void {
-    this.rebuildShapes(this.targetFillGroup, polygons, Z_TARGET_FILL, this.targetFillStampMaterial);
-    this.rebuildStroke(this.targetStrokeGroup, polygons, Z_TARGET_STROKE);
+    this.rebuildShapes(
+      this.targetFillGroup,
+      polygons,
+      Z_TARGET_FILL,
+      this.targetFillStampMaterial,
+      ORDER_TARGET_FILL,
+    );
+    this.rebuildStroke(this.targetStrokeGroup, polygons, Z_TARGET_STROKE, ORDER_TARGET_STROKE);
   }
 
-  /** 用同一个材质重建一组多边形（材质由调用方提供，以便共用模板印章材质） */
+  /**
+   * 用同一个材质重建一组多边形（材质由调用方提供，以便共用模板印章材质）。
+   * `order` 显式写入每个 Mesh 的 renderOrder —— 子对象的 renderOrder 默认是 0，
+   * 不会从父组继承，所以必须逐个设置，否则透明通道里又会被相机距离排序打乱。
+   */
   private rebuildShapes(
     group: THREE.Group,
     polygons: Point2[][],
     z: number,
     material: THREE.Material,
+    order: number,
   ): void {
     disposeChildren(group);
     for (const poly of polygons) {
@@ -181,18 +222,21 @@ export class ProjectionRenderer {
       const geo = new THREE.ShapeGeometry(shape);
       const mesh = new THREE.Mesh(geo, material);
       mesh.position.z = z;
+      mesh.renderOrder = order;
       group.add(mesh);
     }
   }
 
-  private rebuildStroke(group: THREE.Group, polygons: Point2[][], z: number): void {
+  private rebuildStroke(group: THREE.Group, polygons: Point2[][], z: number, order: number): void {
     disposeChildren(group);
     for (const poly of polygons) {
       if (!poly || poly.length < 3) continue;
       const loop = poly.map((p) => new THREE.Vector3(p.x, p.y, z));
       loop.push(loop[0].clone());
       const geo = new THREE.BufferGeometry().setFromPoints(loop);
-      group.add(new THREE.Line(geo, this.targetStrokeMaterial));
+      const line = new THREE.Line(geo, this.targetStrokeMaterial);
+      line.renderOrder = order;
+      group.add(line);
     }
   }
 
@@ -206,27 +250,40 @@ export class ProjectionRenderer {
     return this.shadowGroup.children.length;
   }
 
+
   /**
    * 图层层级快照（供自动化测试断言"影子画在示例图形之上"）。
-   * z 越大越靠前；同 z 时按加入顺序后来者居上。
+   *
+   * 断言的是 **renderOrder**，而不是组内下标或 z 值 —— 后两者都不是真正决定
+   * 透明通道层序的机制（three 按相机距离排序，距离并列时结果不稳定）。
+   * 只有 renderOrder 能稳定地决定谁后画、谁压在上面。
+   *
+   * 同时校验"印章先于铺色"：同组内印章的 renderOrder 必须小于铺色平面，
+   * 否则模板还没写入就去铺色，影子/目标会整块消失。
    */
-  layerOrder(): { targetFill: number; targetStroke: number; shadow: number; shadowIsTop: boolean } {
-    const shadowGroupZ = Z_SHADOW;
-    const order = this.group.children.map((c) => c);
-    const indexOf = (obj: THREE.Object3D) => order.indexOf(obj);
-    const shadowFillIdx = indexOf(this.shadowFill);
-    const strokeIdx = indexOf(this.targetStrokeGroup);
-    const fillIdx = indexOf(this.targetFill);
+  layerOrder(): {
+    targetFill: number;
+    targetStroke: number;
+    shadow: number;
+    shadowIsTop: boolean;
+    stampBeforeFill: boolean;
+  } {
+    const zOk = Z_SHADOW > Z_TARGET_STROKE && Z_TARGET_STROKE > Z_TARGET_FILL;
+    const fillStamps = this.targetFillGroup.children;
+    const shadowStamps = this.shadowGroup.children;
+    // 印章对象（若存在）的 renderOrder 必须 < 对应铺色平面
+    const stampOrderOk = (stamps: THREE.Object3D[], fill: THREE.Object3D) =>
+      stamps.length === 0 || stamps.every((s) => s.renderOrder < fill.renderOrder);
     return {
-      targetFill: fillIdx,
-      targetStroke: strokeIdx,
-      shadow: shadowFillIdx,
-      // 影子既在绘制顺序上最后，z 值也最大，才会真正盖住示例
+      targetFill: this.targetFill.renderOrder,
+      targetStroke: this.targetStrokeGroup.children[0]?.renderOrder ?? ORDER_TARGET_STROKE,
+      shadow: this.shadowFill.renderOrder,
       shadowIsTop:
-        shadowFillIdx > strokeIdx &&
-        shadowFillIdx > fillIdx &&
-        shadowGroupZ > Z_TARGET_STROKE &&
-        Z_TARGET_STROKE > Z_TARGET_FILL,
+        this.shadowFill.renderOrder > (this.targetStrokeGroup.children[0]?.renderOrder ?? ORDER_TARGET_STROKE) &&
+        this.shadowFill.renderOrder > this.targetFill.renderOrder &&
+        zOk,
+      stampBeforeFill:
+        stampOrderOk(fillStamps, this.targetFill) && stampOrderOk(shadowStamps, this.shadowFill),
     };
   }
 
