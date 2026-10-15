@@ -1,0 +1,111 @@
+{
+  "generatedAt": "2026-10-15T13:15:15.002Z",
+  "url": "http://localhost:5173/",
+  "browser": "Chrome/155.0.8059.40",
+  "viewport": {
+    "width": 1600,
+    "height": 1000
+  },
+  "shots": [
+    {
+      "file": "evidence/01-首屏.png",
+      "label": "标题页",
+      "bytes": 1231767
+    },
+    {
+      "file": "evidence/02-纹样图鉴.png",
+      "label": "纹样图鉴与文化来源",
+      "bytes": 398918
+    },
+    {
+      "file": "evidence/03-花窗工坊-步步锦.png",
+      "label": "步步锦模板（默认）",
+      "bytes": 537514
+    },
+    {
+      "file": "evidence/04-空隙投影-墙面特写.png",
+      "label": "墙面影子特写（窗棂空隙被保留）",
+      "bytes": 129984
+    },
+    {
+      "file": "evidence/05-花窗工坊-冰裂纹.png",
+      "label": "冰裂纹模板",
+      "bytes": 563136
+    },
+    {
+      "file": "evidence/06-花窗工坊-三交六椀.png",
+      "label": "三交六椀菱花模板",
+      "bytes": 592208
+    },
+    {
+      "file": "evidence/07-花窗工坊-回纹边饰.png",
+      "label": "回纹边饰模板",
+      "bytes": 547156
+    },
+    {
+      "file": "evidence/07b-工坊-专注画布.png",
+      "label": "收起两侧栏：三维操作区铺满整行（操作区优先）",
+      "bytes": 383149
+    },
+    {
+      "file": "evidence/08-引导实验面板.png",
+      "label": "引导实验：对照读数由实时投影指标推导（含真实变化百分比）",
+      "bytes": 591749
+    },
+    {
+      "file": "evidence/08b-工坊-绘制模式.png",
+      "label": "绘制模式：3 个节点带序号、当前节点有光晕与准星，虚线橡皮筋 + 按 barWidth 换算的真实棂条预览",
+      "bytes": 463995
+    },
+    {
+      "file": "evidence/08c-绘制-节点标识特写.png",
+      "label": "2× 特写：起点（碧玉）/ 中间节点 / 当前节点（光晕 + 十字准星 + 序号）/ 光标落点坐标",
+      "bytes": 109966
+    },
+    {
+      "file": "evidence/09-自绘窗棂.png",
+      "label": "自绘棂条已并入投影",
+      "bytes": 573883
+    },
+    {
+      "file": "evidence/10-导出海报.png",
+      "label": "导出海报 1920×1080（含设计图 / 投影 / 读数）",
+      "bytes": 393166
+    },
+    {
+      "file": "evidence/11-二级入口-光影挑战.png",
+      "label": "二级入口：影形解谜与自由实验室收在这里",
+      "bytes": 183362
+    },
+    {
+      "file": "evidence/12-影形解谜-关卡列表.png",
+      "label": "影形解谜关卡列表：几何初阶 / 花窗影谜 两组，共 10 关",
+      "bytes": 278478
+    },
+    {
+      "file": "evidence/13-影形解谜-第1关.png",
+      "label": "旧关卡链路：第 1 关（真实投影 + IoU 判定）",
+      "bytes": 191801
+    },
+    {
+      "file": "evidence/14-花窗题目-第10关.png",
+      "label": "第 10 关「窗棂总成 · 圆光窗」：窗格之间的空隙同样是判定的一部分",
+      "bytes": 330654
+    },
+    {
+      "file": "evidence/15-花窗题目-第8关.png",
+      "label": "第 8 关「菱花窗 · 三交六椀」：用几何构件拼出经典花窗的影子",
+      "bytes": 324880
+    },
+    {
+      "file": "evidence/16-自由实验室.png",
+      "label": "自由实验室：13 种形状、最多 10 个物体（原有玩法保持可用）",
+      "bytes": 197217
+    },
+    {
+      "file": "evidence/17-自由实验室-镂空凹形.png",
+      "label": "十字 / 五角星 / 圆环：中空同样被如实投影",
+      "bytes": 212450
+    }
+  ]
+}

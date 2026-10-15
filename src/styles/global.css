@@ -1,43 +1,63 @@
 /* ============================================================
    全局样式：设计变量、重置、通用排版
-   风格关键词：留白、柔和日光、几何造型、轻盈、秩序感
+   风格：中国风 · 宣纸、墨、朱砂、碧玉、木
+   关键词：留白、双线、回纹角、印章、窗棂暗纹
    ============================================================ */
 
 :root {
-  /* 背景与面 */
-  --bg: #f4eee2;
-  --bg-deep: #eae2d2;
-  --surface: #fffcf6;
-  --surface-2: #f8f2e7;
-  --surface-3: #f1e9db;
+  /* 背景与面：宣纸 */
+  --bg: #efe6d4;
+  --bg-deep: #e2d7c0;
+  --surface: #fdf8ee;
+  --surface-2: #f7f0e1;
+  --surface-3: #eee4d0;
 
-  /* 文字 */
-  --ink: #2c3a45;
-  --ink-soft: #64748b;
-  --ink-faint: #97a3ad;
+  /* 文字：墨 */
+  --ink: #232f38;
+  --ink-soft: #5b6a73;
+  --ink-faint: #8d989f;
 
-  /* 主色与强调色 */
-  --primary: #2f8fa8;
-  --primary-dark: #1f7f96;
-  --primary-soft: #d9edf2;
-  --accent: #e8a33d;
-  --accent-soft: #fdeccc;
-  --success: #4f9d69;
-  --danger: #c96a5a;
+  /* 主色：靛青（沿用渲染器里的"影"色系，保持与三维场景一致） */
+  --primary: #1e6b7a;
+  --primary-dark: #14525e;
+  --primary-soft: #d6e7e9;
+
+  /* 强调：缃（金黄） */
+  --accent: #c08a1e;
+  --accent-soft: #f7e6c2;
+
+  --success: #4a8f63;
+  --danger: #b4452f;
+
+  /* 中国风专用色 */
+  --cinnabar: #b4452f;
+  --cinnabar-dark: #8e3323;
+  --cinnabar-soft: #f6e0da;
+  --jade: #2f6b57;
+  --wood: #8a5a33;
+  --wood-soft: #f2e4d2;
+  --wood-dark: #6b4425;
+  --wood-light: #c39a6b;
+  --gold: #c9a227;
+  --paper: #f5eee0;
+  --paper-deep: #e8dcc4;
 
   /* 线框与阴影 */
-  --line: #e3d9c7;
-  --line-strong: #cfc3ad;
-  --shadow-sm: 0 1px 2px rgba(44, 58, 69, 0.06);
-  --shadow-md: 0 6px 18px rgba(44, 58, 69, 0.1);
-  --shadow-lg: 0 18px 48px rgba(44, 58, 69, 0.16);
+  --line: #ddd0b6;
+  --line-strong: #c6b492;
+  --shadow-sm: 0 1px 2px rgba(35, 47, 56, 0.07);
+  --shadow-md: 0 6px 18px rgba(35, 47, 56, 0.11);
+  --shadow-lg: 0 18px 48px rgba(35, 47, 56, 0.18);
 
-  --radius-sm: 8px;
-  --radius: 14px;
-  --radius-lg: 22px;
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 16px;
 
   --font: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', system-ui,
     -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  /* 标题与题签用衬线（书卷气），不引入任何网络字体 */
+  --font-title: 'Songti SC', 'STSong', 'Noto Serif SC', 'Source Han Serif SC', 'SimSun', serif;
+  --font-kai: 'STKaiti', 'KaiTi', 'Kaiti SC', 'STSong', 'SimSun', serif;
 
   --dur-fast: 140ms;
   --dur: 240ms;
@@ -90,7 +110,7 @@ button {
 :focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: 3px;
 }
 
 .studio-canvas {
@@ -117,6 +137,7 @@ button {
 }
 
 .fatal-error h1 {
+  font-family: var(--font-title);
   font-size: 24px;
   font-weight: 600;
 }
@@ -146,6 +167,92 @@ button {
 
 .hidden {
   display: none !important;
+}
+
+/* ============================================================
+   中国风装饰原子（全部由 CSS 绘制，不使用任何位图素材）
+   ============================================================ */
+
+/* 直棂窗格暗纹：细横细竖交织的网格 */
+.lattice-bg {
+  background-image: linear-gradient(
+      to right,
+      color-mix(in srgb, var(--wood) 10%, transparent) 0 1px,
+      transparent 1px 100%
+    ),
+    linear-gradient(to bottom, color-mix(in srgb, var(--wood) 10%, transparent) 0 1px, transparent 1px 100%);
+  background-size: 58px 44px;
+}
+
+/* 回纹角：两个对角各一个双线折角 */
+.han-corners {
+  position: relative;
+}
+
+.han-corners::before,
+.han-corners::after {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
+  border: 1px solid color-mix(in srgb, var(--cinnabar) 65%, transparent);
+}
+
+.han-corners::before {
+  top: 5px;
+  left: 5px;
+  border-right: none;
+  border-bottom: none;
+}
+
+.han-corners::after {
+  right: 5px;
+  bottom: 5px;
+  border-left: none;
+  border-top: none;
+}
+
+/* 双线分隔：细线 + 短净线，中间一枚菱形 */
+.han-rule {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: color-mix(in srgb, var(--ink) 35%, transparent);
+}
+
+.han-rule::before,
+.han-rule::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: currentColor;
+}
+
+/* 朱砂印章题签 */
+.seal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 4px;
+  border-radius: 4px;
+  background: var(--cinnabar);
+  color: #fff6f0;
+  font-family: var(--font-title);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  writing-mode: vertical-rl;
+  line-height: 1.05;
+  box-shadow: 0 2px 0 color-mix(in srgb, var(--cinnabar-dark) 80%, transparent);
+}
+
+/* 少量纸纹：极淡的横向纤维感 */
+.paper-grain {
+  background-image: repeating-linear-gradient(
+    0deg,
+    color-mix(in srgb, var(--wood) 5%, transparent) 0 1px,
+    transparent 1px 5px
+  );
 }
 
 /* 淡入动画 */
@@ -191,6 +298,26 @@ button {
   }
   50% {
     opacity: 1;
+  }
+}
+
+@keyframes float-y {
+  0%,
+  100% {
+    transform: translateY(0) rotate(var(--rot, 0deg));
+  }
+  50% {
+    transform: translateY(-16px) rotate(var(--rot, 0deg));
+  }
+}
+
+@keyframes drift-x {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(14px);
   }
 }
 

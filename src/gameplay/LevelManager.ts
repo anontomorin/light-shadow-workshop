@@ -1,6 +1,6 @@
-import { getLocalVertices } from '../scene/GeometryFactory';
+import { getObjectLocalVertices } from '../scene/GeometryFactory';
 import { SilhouetteRasterizer } from '../projection/SilhouetteRasterizer';
-import { clipPolygonToWall, projectShape, type Point2 } from '../projection/Projector';
+import { clipPolygonToWall, projectParts, type Point2 } from '../projection/Projector';
 import type { LevelDefinition, Transform3D } from './LevelData';
 import type { LightState } from './LightController';
 
@@ -82,6 +82,14 @@ export class LevelManager {
     return this.rasterizer.rasterize(this.currentPolygons());
   }
 
+  /**
+   * 计算当前投影多边形。
+   * 使用与目标掩码完全相同的坐标映射与裁剪规则。
+   *
+   * 返回的是**扁平的多边形列表**：复合构件的每个凸零件各贡献一个多边形，
+   * 由 `SilhouetteRasterizer.rasterize()` 取并集。这样构件内部与构件之间的
+   * 镂空（花窗的格眼）才不会被填死。
+   */
   private computePolygons(
     transforms: Transform3D[],
     light: { x: number; y: number; z: number },
@@ -89,15 +97,16 @@ export class LevelManager {
   ): Point2[][] {
     const out: Point2[][] = [];
     level.objects.forEach((obj, i) => {
-      const poly = projectShape(
-        getLocalVertices(obj.shape),
+      const hulls = projectParts(
+        getObjectLocalVertices(obj),
         transforms[i],
         light,
         obj.scale ?? 1,
       );
-      if (!poly) return;
-      const clipped = clipPolygonToWall(poly);
-      if (clipped.length >= 3) out.push(clipped);
+      for (const hull of hulls) {
+        const clipped = clipPolygonToWall(hull);
+        if (clipped.length >= 3) out.push(clipped);
+      }
     });
     return out;
   }

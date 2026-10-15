@@ -93,8 +93,11 @@ export function buildMatrix(t: Transform3D, scale = 1): THREE.Matrix4 {
 
 /**
  * Andrew monotone chain 凸包。输入任意点集，返回按逆时针排列的凸包顶点。
- * 所有基础形状都是凸的，因此凸包即为其在墙面上的投影轮廓；
+ *
+ * 调用约定：**只对单个凸零件调用**。凸零件的投影凸包即其在墙面上的轮廓；
  * 同时凸包天然地把有厚度的前后两层顶点合并为一个外轮廓。
+ * 若把一整个凹形状（或一扇花窗的全部杆件）摊平后调用，凹口与镂空会被填死，
+ * 因此请改用 `projectParts` 逐零件调用。
  */
 export function convexHull(points: Point2[]): Point2[] {
   if (points.length <= 2) return points.slice();
@@ -121,26 +124,42 @@ export function convexHull(points: Point2[]): Point2[] {
 }
 
 /**
- * 将一个物体（其局部顶点由 localVertices 给出）投影到墙面，返回轮廓多边形。
- * 返回 null 表示该物体当前无法投影（例如深度非法）。
+ * 逐零件投影：对**每个凸零件单独求凸包**，返回若干多边形。
+ *
+ * 这是本轮新增花窗玩法与凹形几何的核心。整条链路上：
+ *   零件 → 各自凸包（此函数）→ 墙面裁剪 → `rasterize()` 并集 → 掩码 / 渲染。
+ * 由于凸包只在零件内部做，零件之间没有覆盖的区域恒为 0 ——
+ * 十字的凹口、圆环的中空、花窗棂条之间的空隙因此都被如实保留。
+ *
+ * 之所以可以放心地拆分：本模型是**几何投影**（点光源 + 平面），
+ * 单个凸长方体薄片的影子恰好等于其全部投影点的凸包
+ * （正面投影严格包含背面投影，侧面投影又被正面投影包含）。
+ * 于是"对每个零件求凸包再取并集"与逐点投影的并集完全等价。
+ *
+ * 单零件形状传入长度 1 的数组即可，返回值即该物体的唯一轮廓。
  */
-export function projectShape(
-  localVertices: THREE.Vector3Like[],
+export function projectParts(
+  localParts: THREE.Vector3Like[][],
   transform: Transform3D,
   light: THREE.Vector3Like,
   scale = 1,
   wallZ: number = WALL_Z,
-): Point2[] | null {
+): Point2[][] {
   const mat = buildMatrix(transform, scale);
   const v = new THREE.Vector3();
-  const projected: Point2[] = [];
-  for (const lv of localVertices) {
-    v.set(lv.x, lv.y, lv.z).applyMatrix4(mat);
-    const q = projectPoint(light, v, wallZ);
-    if (q) projected.push(q);
+  const out: Point2[][] = [];
+  for (const part of localParts) {
+    const projected: Point2[] = [];
+    for (const lv of part) {
+      v.set(lv.x, lv.y, lv.z).applyMatrix4(mat);
+      const q = projectPoint(light, v, wallZ);
+      if (q) projected.push(q);
+    }
+    if (projected.length < 3) continue;
+    const hull = convexHull(projected);
+    if (hull.length >= 3) out.push(hull);
   }
-  if (projected.length < 3) return null;
-  return convexHull(projected);
+  return out;
 }
 
 /** 把墙面世界坐标映射到掩码画布的像素坐标（浮点，未取整） */

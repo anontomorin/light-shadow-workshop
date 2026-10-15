@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import type { SceneManager } from '../scene/SceneManager';
-import type { StudioScene } from '../scene/StudioScene';
 import { OBJECT_LIMITS, clampSafe } from '../projection/Projector';
 import type { LevelControls, Transform3D } from './LevelData';
 
@@ -11,6 +10,21 @@ import type { LevelControls, Transform3D } from './LevelData';
  * 并保留按下瞬间物体中心与交点的偏移量，避免物体在屏幕上突然跳跃。
  */
 
+/**
+ * 交互控制器的舞台接口。
+ *
+ * 关卡界面与自由实验室用 StudioScene 实现它；花窗工坊用 WorkshopStage 实现它
+ * （窗格是一组棂条杆件，与单个挤出薄片的处理方式不同）。
+ * 结构化类型让两者可以共用同一套拖动 / 旋转 / 键盘微调逻辑。
+ */
+export interface InteractiveStage {
+  /** 可被射线拾取的对象（每个对象都必须带 userData.objectId） */
+  getPickables(): THREE.Object3D[];
+  setSelected(id: string | null): void;
+  getSelected(): string | null;
+  updateTransform(id: string, t: Transform3D): void;
+}
+
 export interface InteractionCallbacks {
   onSelect: (id: string | null) => void;
   onChange: (id: string, transform: Transform3D) => void;
@@ -19,7 +33,7 @@ export interface InteractionCallbacks {
 }
 
 export class InteractionController {
-  private scene: StudioScene;
+  private scene: InteractiveStage;
   private sceneManager: SceneManager;
   private cb: InteractionCallbacks;
   private controls: LevelControls;
@@ -36,7 +50,7 @@ export class InteractionController {
   private canvas: HTMLCanvasElement;
 
   constructor(
-    scene: StudioScene,
+    scene: InteractiveStage,
     sceneManager: SceneManager,
     controls: LevelControls,
     cb: InteractionCallbacks,

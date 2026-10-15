@@ -58,8 +58,8 @@ export class LabHUD {
     const topbar = h('div', { class: 'game-topbar' }, [
       h('button', {
         class: 'btn btn-icon',
-        title: '返回标题页',
-        'aria-label': '返回标题页',
+        title: '返回光影挑战',
+        'aria-label': '返回光影挑战',
         text: '←',
         onclick: handlers.onBack,
       }),
@@ -142,7 +142,7 @@ export class LabHUD {
         }),
         h('button', {
           class: 'btn btn-sm btn-primary',
-          text: '返回标题页',
+          text: '返回光影挑战',
           onclick: () => this.handlers.onBack(),
         }),
       ]),

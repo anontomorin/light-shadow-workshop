@@ -9,7 +9,12 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "verify": "tsx scripts/verify-levels.ts"
+    "verify": "tsx scripts/verify-levels.ts",
+    "verify:window": "tsx scripts/verify-window.ts",
+    "verify:all": "npm run verify && npm run verify:window",
+    "verify:prod": "node scripts/check-prod-hook.mjs",
+    "e2e": "node scripts/e2e-check.mjs",
+    "evidence": "node scripts/capture-evidence.mjs"
   },
   "dependencies": {
     "three": "^0.169.0"

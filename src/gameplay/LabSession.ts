@@ -1,5 +1,5 @@
-import { getLocalVertices } from '../scene/GeometryFactory';
-import { clipPolygonToWall, projectShape, type Point2 } from '../projection/Projector';
+import { getObjectLocalVertices } from '../scene/GeometryFactory';
+import { clipPolygonToWall, projectParts, type Point2 } from '../projection/Projector';
 import type { ShadowObjectDefinition, ShapeType, Transform3D } from './LevelData';
 import type { LightState } from './LightController';
 
@@ -28,6 +28,13 @@ export const LAB_SHAPES: Array<{ shape: ShapeType; name: string; color: string }
   { shape: 'rectangle', name: '长方', color: '#b4753f' },
   { shape: 'hexagon', name: '六边', color: '#7b9fd6' },
   { shape: 'diamond', name: '菱形', color: '#b98bd6' },
+  { shape: 'pentagon', name: '五边', color: '#d08a4a' },
+  { shape: 'octagon', name: '八边', color: '#5fa8a0' },
+  { shape: 'trapezoid', name: '梯形', color: '#c2703f' },
+  { shape: 'semicircle', name: '半圆', color: '#8fa9dc' },
+  { shape: 'cross', name: '十字', color: '#c2452d' },
+  { shape: 'star', name: '星形', color: '#d9a72c' },
+  { shape: 'ring', name: '圆环', color: '#2f6b57' },
 ];
 
 /** 自由实验室最多容纳的物体数量（保持性能与画面整洁） */
@@ -135,15 +142,24 @@ export class LabSession {
     this.transforms.set(id, { ...t });
   }
 
-  /** 当前所有物体的投影轮廓（与正式关卡共用同一套投影与裁剪规则） */
+  /**
+   * 当前所有物体的投影轮廓（与正式关卡共用同一套投影与裁剪规则）。
+   * 复合构件的每个凸零件各贡献一个多边形，由光栅化阶段取并集。
+   */
   polygons(): Point2[][] {
     const out: Point2[][] = [];
     for (const obj of this.objects) {
       const t = this.transforms.get(obj.id) ?? obj.initial;
-      const poly = projectShape(getLocalVertices(obj.shape), t, this.light, obj.scale ?? 1);
-      if (!poly) continue;
-      const clipped = clipPolygonToWall(poly);
-      if (clipped.length >= 3) out.push(clipped);
+      const hulls = projectParts(
+        getObjectLocalVertices(obj),
+        t,
+        this.light,
+        obj.scale ?? 1,
+      );
+      for (const hull of hulls) {
+        const clipped = clipPolygonToWall(hull);
+        if (clipped.length >= 3) out.push(clipped);
+      }
     }
     return out;
   }

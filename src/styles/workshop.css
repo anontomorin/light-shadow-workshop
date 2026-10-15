@@ -1,0 +1,1026 @@
+/* ============================================================
+   花窗工坊 · 视觉与布局
+   风格：明亮、克制的东方几何；宣纸底 + 木色/碧玉主色 + 少量朱砂点缀。
+   本文件只处理工坊界面（WindowEditorHUD）、纹样图鉴与作品集的版面，
+   不改动标题页 / 二级入口 / 关卡页 / 游戏页 / 实验室的样式
+   （那些都在 screens.css 与 components.css 里）。
+   ============================================================ */
+
+/* 注意：木色 / 碧玉 / 朱砂等色值统一由 global.css 的 :root 提供，
+   本文件不再重复定义，避免后加载的文件覆盖全局中国风配色。 */
+
+/* ---------------- 常驻弹窗层 ---------------- */
+.modal-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+}
+
+.modal-layer > .modal-mask {
+  pointer-events: auto;
+}
+
+/* ---------------- 工坊整体布局 ---------------- */
+
+/* 三行：工具栏 / 主体 / 底部操作坞。
+   工具栏**参与网格流**（覆盖 screens.css 里的绝对定位），否则它会盖住三维操作区上沿。 */
+.workshop-screen {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  height: 100%;
+  padding: 10px 12px 12px;
+  background: linear-gradient(180deg, var(--surface) 0%, var(--bg) 100%);
+}
+
+.workshop-screen > .game-topbar {
+  grid-column: 1;
+  grid-row: 1;
+  position: static;
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  pointer-events: auto;
+}
+
+.workshop-screen .topbar-info {
+  padding: 3px 10px;
+  background: transparent;
+  border: none;
+  border-left: 3px solid var(--cinnabar);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.workshop-screen > .workshop-body {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.workshop-screen > .game-dock {
+  grid-column: 1;
+  grid-row: 3;
+  padding: 7px 12px;
+  gap: 10px;
+  row-gap: 6px;
+  border: 1px solid var(--line);
+  border-top: 2px solid var(--wood-light);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, var(--surface), var(--surface-2));
+  box-shadow: var(--shadow-sm);
+}
+
+.workshop-dock .btn {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+/* 主体三列：左栏 · 【三维操作区】 · 右栏。
+   列宽写成变量，收起侧栏时只要把变量归零，画布立刻铺满整行。 */
+.workshop-body {
+  --col-left: 252px;
+  --col-right: 336px;
+  display: grid;
+  grid-template-columns: var(--col-left) minmax(0, 1fr) var(--col-right);
+  grid-template-areas: 'left stage right';
+  gap: 10px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.workshop-body > .workshop-left {
+  grid-area: left;
+}
+
+.workshop-body > .workshop-right {
+  grid-area: right;
+}
+
+/*
+ * 三维操作区永远占中间那一列，并吃掉全部剩余宽度。
+ *
+ * ⚠️ 这里必须用 grid-area 显式定位：screens.css 里有一条为「关卡 / 实验室」页写的
+ * 通用规则 `.stage-wrap { grid-column: 1; grid-row: 1 }`，工坊的 .stage-wrap 同样会被它命中。
+ * 结果就是画布被塞进 252px 的第 1 列、左栏反而膨胀成 1fr——
+ * 这正是"操作区又窄又挤在角落"的根因。选择器比它更具体（多了一层 .workshop-screen）
+ * 所以能覆盖，且 grid-area 会同时重置 grid-column / grid-row。
+ */
+.workshop-screen .stage-wrap,
+.workshop-body > .stage-wrap {
+  grid-area: stage;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: #f6efe3;
+  box-shadow: var(--shadow-sm);
+}
+
+/* 收起侧栏：列宽归零 + 面板隐藏 */
+.workshop-body[data-collapsed~='left'] {
+  --col-left: 0px;
+}
+
+.workshop-body[data-collapsed~='right'] {
+  --col-right: 0px;
+}
+
+.workshop-body[data-collapsed~='left'] > .workshop-left,
+.workshop-body[data-collapsed~='right'] > .workshop-right {
+  display: none;
+}
+
+.workshop-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  padding-right: 4px;
+  min-height: 0;
+}
+
+.workshop-panel .side-section {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.workshop-panel .side-section h3 {
+  margin-bottom: 9px;
+}
+
+.workshop-screen .stage {
+  position: absolute;
+  inset: 0;
+}
+
+.workshop-screen .stage canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* ---------------- 操作区浮层：指引 / 侧栏开关 / 状态条 ---------------- */
+.stage-hud {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.stage-tools {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  gap: 6px;
+  pointer-events: auto;
+}
+
+.side-toggle {
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(6px);
+  box-shadow: var(--shadow-sm);
+}
+
+.guide-card {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 318px;
+  max-width: calc(100% - 20px);
+  max-height: calc(100% - 46px);
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--wood);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  backdrop-filter: blur(8px);
+  box-shadow: var(--shadow-md);
+  pointer-events: auto;
+  overflow: hidden;
+}
+
+.guide-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.guide-title {
+  font-family: var(--font-title);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.guide-body {
+  overflow-y: auto;
+  padding: 10px;
+}
+
+.guide-card.collapsed {
+  width: auto;
+}
+
+/* 内容超出时才加底部渐隐，提示"下面还有"（由 render() 按 scrollHeight 判定） */
+.guide-card.is-scrollable::after {
+  content: '';
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  bottom: 0;
+  height: 26px;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(253, 248, 238, 0), rgba(253, 248, 238, 0.96));
+}
+
+.guide-card.collapsed .guide-body {
+  display: none;
+}
+
+/* 绘制模式：指引卡收成一条提示条，把画布让出来
+   （绘制时整块画布都要能点；键位仍然写在提示条与底部状态条里） */
+.guide-card.is-drawing {
+  width: auto;
+  max-width: min(460px, calc(100% - 20px));
+}
+
+.guide-card.is-drawing .guide-body,
+.guide-card.is-drawing .guide-toggle {
+  display: none;
+}
+
+.guide-card.is-drawing .guide-head {
+  border-bottom: none;
+}
+
+.guide-draw-chip {
+  display: none;
+  font-size: 12px;
+  color: var(--ink-soft);
+  letter-spacing: 0.02em;
+}
+
+.guide-card.is-drawing .guide-draw-chip {
+  display: inline;
+}
+
+.guide-card.collapsed .guide-head {
+  border-bottom: none;
+}
+
+.guide-block-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: var(--jade);
+  margin: 1px 0 5px;
+}
+
+.guide-steps {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.guide-step {
+  display: flex;
+  gap: 7px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.guide-step-no {
+  flex: none;
+  width: 17px;
+  height: 17px;
+  margin-top: 1px;
+  border-radius: 50%;
+  border: 1px solid var(--cinnabar);
+  color: var(--cinnabar);
+  font-size: 10px;
+  line-height: 15px;
+  text-align: center;
+}
+
+.guide-group {
+  margin-bottom: 7px;
+}
+
+.guide-group-title {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--wood);
+  margin-bottom: 4px;
+}
+
+.guide-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.guide-keys {
+  flex: 0 0 96px;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.guide-desc {
+  color: var(--ink-soft);
+}
+
+.stage-status {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 5px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  border-top: 1px solid var(--line);
+  backdrop-filter: blur(6px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+  /* 只读信息条：不吃指针事件，免得拖到画布下沿时被它挡住 */
+  pointer-events: none;
+}
+
+.stage-status.is-drawing {
+  color: var(--cinnabar);
+  border-top-color: var(--cinnabar);
+  font-weight: 600;
+}
+
+/* ---------------- 顶部栏中的输入 ---------------- */
+.text-input {
+  height: 32px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  width: 168px;
+}
+
+.text-input-sm {
+  width: 120px;
+}
+
+.save-state {
+  font-size: 12px;
+  color: var(--ink-soft);
+  padding: 0 6px;
+  white-space: nowrap;
+}
+
+/* ---------------- 模板卡 ---------------- */
+.pattern-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pattern-card {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: left;
+  padding: 9px 11px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+
+.pattern-card:hover {
+  border-color: var(--primary);
+}
+
+.pattern-card.active {
+  border-color: var(--wood);
+  background: var(--wood-soft);
+}
+
+.pattern-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.pattern-desc {
+  font-size: 11px;
+  color: var(--ink-soft);
+  line-height: 1.4;
+}
+
+/* ---------------- 统计 / 读数 ---------------- */
+.component-stats,
+.metrics-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.stat-row,
+.metric-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.stat-row .k,
+.metric-row .k {
+  color: var(--ink-soft);
+}
+
+.metric-row .v {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  padding: 4px 0;
+  cursor: pointer;
+}
+
+.draw-hint {
+  font-size: 12px;
+  color: var(--ink-soft);
+  line-height: 1.6;
+  margin-top: 6px;
+}
+
+/* ---------------- 提示条 ---------------- */
+.notice-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  max-width: min(680px, calc(100% - 32px));
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  line-height: 1.5;
+  background: rgba(255, 252, 246, 0.96);
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow-md);
+  color: var(--ink);
+}
+
+/* 工坊的提示条要落在画布底部状态条之上，别把状态条盖掉 */
+.workshop-screen .notice-bar {
+  bottom: 44px;
+  z-index: 6;
+}
+
+.notice-bar.notice-warn {
+  border-color: var(--accent);
+  background: #fff8e8;
+}
+
+.notice-bar.notice-info {
+  border-color: var(--primary);
+}
+
+/* ---------------- 绘制覆盖层 ----------------
+   绘制模式下的可视化完全由 SVG 图元组成（节点标识、棂条预览、橡皮筋），
+   坐标系就是浮层自身的像素坐标，与 DrawingTool 上报的屏幕坐标一一对应。
+   浮层整体 pointer-events: none，键盘 / 鼠标事件仍然落在下面的画布上。
+
+   注意 `width/height: 100%` 不能省：`<svg>` 是替换元素，只写 `inset: 0` 时
+   `width: auto` 会退回**内联默认尺寸 300×150**，而 SVG 根元素默认
+   `overflow: hidden` —— 于是画在窗格位置（在 300×150 之外）的节点与预览
+   会被自己的 viewport 裁掉，屏幕上看起来"完全没有预览"。 */
+.draw-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  display: none;
+}
+
+.draw-overlay.active {
+  display: block;
+}
+
+/* 绘制范围提示框：让人一眼看出"现在处于绘制模式" */
+.draw-frame {
+  fill: none;
+  stroke: var(--cinnabar);
+  stroke-width: 1.5;
+  stroke-dasharray: 8 6;
+  opacity: 0.55;
+}
+
+/* 真实粗细的棂条预览（stroke-width 由 barWidth 换算，随视角实时更新） */
+.draw-ghost {
+  fill: none;
+  stroke: var(--cinnabar);
+  stroke-opacity: 0.22;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* 中心折线：标出节点的连接关系 */
+.draw-preview {
+  fill: none;
+  stroke: var(--cinnabar);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-dasharray: 6 4;
+}
+
+/* 橡皮筋：最后一个节点 → 光标，鼠标还没点下去就能看到下一段 */
+.draw-rubber {
+  stroke: var(--cinnabar);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 5;
+  opacity: 0.75;
+}
+
+.draw-hover-dot {
+  fill: #fff;
+  stroke: var(--jade);
+  stroke-width: 2;
+}
+
+.draw-hover-label {
+  fill: var(--ink);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  paint-order: stroke;
+  stroke: var(--surface);
+  stroke-width: 3;
+  opacity: 0.9;
+}
+
+/* ---- 节点标识 ---- */
+.draw-node-dot {
+  fill: var(--cinnabar);
+  stroke: #fff;
+  stroke-width: 1.5;
+}
+
+/* 起点用碧玉色，方向感更清楚 */
+.draw-node-item.is-first .draw-node-dot {
+  fill: var(--jade);
+}
+
+/* 当前节点：加粗描边 + 光晕 + 十字准星，是整条折线上最显眼的元素 */
+.draw-node-item.is-current .draw-node-dot {
+  stroke-width: 3;
+}
+
+.draw-node-ring {
+  fill: none;
+  stroke: var(--cinnabar);
+  stroke-width: 2;
+  opacity: 0;
+}
+
+.draw-node-item.is-first .draw-node-ring {
+  stroke: var(--jade);
+  opacity: 0.85;
+}
+
+.draw-node-item.is-current .draw-node-ring {
+  opacity: 1;
+  animation: draw-node-pulse 1.4s ease-in-out infinite;
+}
+
+.draw-node-cross {
+  stroke: var(--cinnabar);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.draw-node-index {
+  fill: var(--ink);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  paint-order: stroke;
+  stroke: var(--surface);
+  stroke-width: 3;
+}
+
+@keyframes draw-node-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    r: 9;
+  }
+  50% {
+    opacity: 0.45;
+    r: 12;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .draw-node-item.is-current .draw-node-ring {
+    animation: none;
+  }
+}
+
+/* ---------------- 文化卡片 / 实验卡 ---------------- */
+.culture-card h3,
+.experiment-card h3 {
+  font-size: 15px;
+}
+
+.culture-field,
+.gallery-field {
+  margin-bottom: 10px;
+}
+
+.culture-field .k,
+.gallery-field .k,
+.culture-sources .k,
+.gallery-sources .k {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--jade);
+  margin-bottom: 3px;
+  font-weight: 600;
+}
+
+.culture-field p,
+.gallery-field p {
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--ink);
+}
+
+.culture-model-note,
+.gallery-model-note {
+  padding: 9px 11px;
+  border-radius: var(--radius-sm);
+  background: var(--cinnabar-soft);
+  border: 1px solid rgba(194, 69, 45, 0.28);
+  margin-bottom: 10px;
+}
+
+.culture-model-note .k {
+  display: block;
+  font-size: 11px;
+  color: var(--cinnabar);
+  font-weight: 600;
+  margin-bottom: 3px;
+}
+
+.culture-model-note p,
+.gallery-model-note p {
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.culture-sources ul,
+.gallery-sources ul,
+.about-sources {
+  list-style: none;
+  padding: 0;
+  margin: 4px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.culture-sources a,
+.gallery-sources a,
+.about-sources a {
+  font-size: 12px;
+  color: var(--primary-dark);
+  text-decoration: none;
+  line-height: 1.5;
+}
+
+.culture-sources a:hover,
+.gallery-sources a:hover,
+.about-sources a:hover {
+  text-decoration: underline;
+}
+
+.experiment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.experiment-list .btn {
+  width: 100%;
+  text-align: left;
+  justify-content: flex-start;
+}
+
+.experiment-steps {
+  margin: 6px 0 8px;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--ink-soft);
+}
+
+.experiment-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.experiment-text {
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--ink);
+}
+
+/* ---------------- 底部操作坞 ---------------- */
+.workshop-dock {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.workshop-dock .dock-group {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.btn-active {
+  border-color: var(--cinnabar) !important;
+  background: var(--cinnabar-soft) !important;
+  color: var(--cinnabar) !important;
+}
+
+.btn-danger {
+  border-color: rgba(194, 69, 45, 0.4);
+  color: var(--cinnabar);
+}
+
+/* ---------------- 纹样档案（窗棂初识） ---------------- */
+.gallery-modal {
+  width: min(1180px, calc(100% - 48px));
+}
+
+.gallery-intro p {
+  margin-top: 6px;
+}
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.gallery-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+}
+
+.gallery-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.gallery-card-head h3 {
+  font-size: 16px;
+}
+
+.gallery-preview {
+  display: flex;
+  justify-content: center;
+  background: #fffdf8;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  padding: 6px;
+}
+
+.gallery-modes {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.gallery-modes .btn.active {
+  border-color: var(--wood);
+  background: var(--wood-soft);
+}
+
+.gallery-meta {
+  min-height: 18px;
+}
+
+.gallery-actions {
+  margin-top: auto;
+}
+
+/* ---------------- 关于 / 作品集 ---------------- */
+.about-modal,
+.artwork-modal {
+  width: min(720px, calc(100% - 48px));
+}
+
+.about-modal h3 {
+  margin: 16px 0 6px;
+  font-size: 15px;
+}
+
+.about-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  line-height: 1.75;
+  color: var(--ink);
+}
+
+.artwork-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+
+.artwork-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+}
+
+.artwork-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.artwork-meta {
+  grid-column: 1;
+}
+
+.artwork-actions {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  display: flex;
+  gap: 6px;
+}
+
+/* ---------------- 首页新增元素 ---------------- */
+.title-lattice {
+  position: absolute;
+  inset: -10% -5%;
+  opacity: 0.5;
+  background-image:
+    linear-gradient(to right, rgba(138, 90, 51, 0.14) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(138, 90, 51, 0.14) 1px, transparent 1px);
+  background-size: 58px 58px;
+  -webkit-mask-image: radial-gradient(ellipse at 50% 45%, #000 12%, transparent 72%);
+  mask-image: radial-gradient(ellipse at 50% 45%, #000 12%, transparent 72%);
+  pointer-events: none;
+}
+
+.title-actions {
+  flex-wrap: wrap;
+}
+
+.btn-workshop {
+  border-color: var(--wood);
+  background: var(--wood-soft);
+  color: #6b4423;
+}
+
+.btn-ghost {
+  background: transparent;
+}
+
+/* ---------------- 响应式：画布优先 ---------------- */
+@media (max-width: 1440px) {
+  .workshop-body {
+    --col-left: 232px;
+    --col-right: 312px;
+  }
+}
+
+@media (max-width: 1180px) {
+  .workshop-body {
+    --col-left: 216px;
+    --col-right: 292px;
+  }
+
+  .guide-card {
+    width: 268px;
+  }
+}
+
+/* 窄屏：改为"画布在最上、侧栏堆在下面"，画布始终排在第一位 */
+@media (max-width: 1024px) {
+  .workshop-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'stage' 'left' 'right';
+    grid-template-rows: minmax(340px, 54vh) auto auto;
+    overflow-y: auto;
+  }
+
+  .workshop-body[data-collapsed~='left'],
+  .workshop-body[data-collapsed~='right'] {
+    grid-template-rows: minmax(340px, 54vh) auto auto;
+  }
+
+  .workshop-panel {
+    overflow: visible;
+  }
+
+  .workshop-left,
+  .workshop-right {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 10px;
+  }
+
+  .workshop-body[data-collapsed~='left'] > .workshop-left,
+  .workshop-body[data-collapsed~='right'] > .workshop-right {
+    display: none;
+  }
+
+  .gallery-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .text-input,
+  .text-input-sm {
+    width: 120px;
+  }
+
+  .game-topbar {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 560px) {
+  .workshop-dock {
+    justify-content: center;
+  }
+
+  .workshop-body {
+    grid-template-rows: minmax(280px, 46vh) auto auto;
+  }
+
+  .guide-card {
+    width: calc(100% - 20px);
+    max-height: 46%;
+  }
+
+  .notice-bar {
+    font-size: 12px;
+    bottom: 10px;
+  }
+}

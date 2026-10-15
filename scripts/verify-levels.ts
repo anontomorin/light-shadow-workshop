@@ -17,7 +17,7 @@
  * 运行：npm run verify
  */
 import { LEVELS } from '../src/data/levels';
-import { getLocalVertices } from '../src/scene/GeometryFactory';
+import { getObjectLocalVertices } from '../src/scene/GeometryFactory';
 import {
   MASK_H,
   MASK_W,
@@ -27,7 +27,7 @@ import {
   WALL_MIN_X,
   WALL_MIN_Y,
   clipPolygonToWall,
-  projectShape,
+  projectParts,
   type Point2,
 } from '../src/projection/Projector';
 import type { LevelDefinition, Transform3D } from '../src/gameplay/LevelData';
@@ -115,6 +115,11 @@ function overlayAscii(current: Uint8Array, target: Uint8Array, cols = 76, rows =
 
 // ─────────────────────────── 投影计算 ───────────────────────────
 
+/**
+ * 逐零件投影：复合构件的每个凸零件各贡献一个多边形。
+ * 必须逐零件求凸包并在光栅化阶段取并集 —— 一旦把整个构件摊平求一次凸包，
+ * 花窗的格眼会被填死（本脚本第三节专门有一条断言防止这种回归）。
+ */
 function polygonsOf(
   level: LevelDefinition,
   transforms: Transform3D[],
@@ -122,8 +127,10 @@ function polygonsOf(
 ): Point2[][] {
   const out: Point2[][] = [];
   level.objects.forEach((obj, i) => {
-    const poly = projectShape(getLocalVertices(obj.shape), transforms[i], light, obj.scale ?? 1);
-    if (poly) out.push(clipPolygonToWall(poly));
+    for (const hull of projectParts(getObjectLocalVertices(obj), transforms[i], light, obj.scale ?? 1)) {
+      const clipped = clipPolygonToWall(hull);
+      if (clipped.length >= 3) out.push(clipped);
+    }
   });
   return out;
 }

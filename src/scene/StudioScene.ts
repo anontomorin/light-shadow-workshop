@@ -8,7 +8,7 @@ import {
   WALL_WIDTH,
   WALL_Z,
 } from '../projection/Projector';
-import { getPlateGeometry } from './GeometryFactory';
+import { getObjectPartGeometries } from './GeometryFactory';
 import { ProjectionRenderer } from './ProjectionRenderer';
 import type { ShadowObjectDefinition, Transform3D } from '../gameplay/LevelData';
 
@@ -22,10 +22,20 @@ const COLOR_FLOOR = '#ece3d2';
 const COLOR_FRAME = '#d8cdb8';
 const COLOR_LAMP = '#ffcf7a';
 
+/**
+ * 一个可操作物体在场景中的呈现。
+ *
+ * 物体由"一组零件网格"构成（见 GeometryFactory 的零件模型）：
+ *   凸形状 = 1 个网格；十字 = 3 个；五角星 = 6 个；圆环 = 18 个；
+ *   花窗关卡的"外框""十字棂""菱花心"等构件则各自是一组棂条。
+ * `group` 承担物体的世界变换（位置 / 姿态 / 选中脉动），零件网格只负责自身
+ * 在物体局部坐标下的摆放（缩放 / 面内旋转 / 平移）。
+ */
 interface ObjectEntry {
   def: ShadowObjectDefinition;
-  mesh: THREE.Mesh;
-  outline: THREE.LineSegments;
+  group: THREE.Group;
+  meshes: THREE.Mesh[];
+  outlines: THREE.LineSegments[];
   transform: Transform3D;
 }
 
@@ -171,32 +181,43 @@ export class StudioScene {
   setObjects(defs: ShadowObjectDefinition[], transforms: Transform3D[]): void {
     this.clearObjects();
     defs.forEach((def, i) => {
-      const geo = getPlateGeometry(def.shape);
-      const mat = new THREE.MeshStandardMaterial({
+      const objectScale = def.scale ?? 1;
+      const material = new THREE.MeshStandardMaterial({
         color: def.color,
         roughness: 0.55,
         metalness: 0.05,
         emissive: new THREE.Color(def.color).multiplyScalar(0.06),
       });
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.scale.setScalar(def.scale ?? 1);
-      mesh.userData.objectId = def.id;
+      this.disposables.push(material);
 
-      const outlineGeo = new THREE.EdgesGeometry(geo, 25);
-      const outline = new THREE.LineSegments(outlineGeo, this.outlineMaterial);
-      outline.visible = false;
-      outline.scale.setScalar((def.scale ?? 1) * 1.06);
-      mesh.add(outline);
+      const group = new THREE.Group();
+      group.userData.objectId = def.id;
+      const meshes: THREE.Mesh[] = [];
+      const outlines: THREE.LineSegments[] = [];
 
-      this.objectGroup.add(mesh);
-      this.disposables.push(mat, outlineGeo);
+      for (const placement of getObjectPartGeometries(def)) {
+        const mesh = new THREE.Mesh(placement.geometry, material);
+        mesh.position.set(placement.dx, placement.dy, 0);
+        mesh.rotation.z = THREE.MathUtils.degToRad(placement.rot);
+        mesh.scale.set(
+          objectScale * placement.sx,
+          objectScale * placement.sy,
+          objectScale,
+        );
+        mesh.userData.objectId = def.id;
+        // 描边随零件自身缩放，稍微外扩一点避免与实体共面闪烁
+        const outlineGeo = new THREE.EdgesGeometry(placement.geometry, 25);
+        const outline = new THREE.LineSegments(outlineGeo, this.outlineMaterial);
+        outline.visible = false;
+        outline.scale.setScalar(1.06);
+        mesh.add(outline);
+        meshes.push(mesh);
+        outlines.push(outline);
+        group.add(mesh);
+      }
 
-      const entry: ObjectEntry = {
-        def,
-        mesh,
-        outline,
-        transform: { ...transforms[i] },
-      };
+      this.objectGroup.add(group);
+      const entry: ObjectEntry = { def, group, meshes, outlines, transform: { ...transforms[i] } };
       this.entries.push(entry);
       this.applyTransform(entry);
     });
@@ -204,9 +225,10 @@ export class StudioScene {
 
   private clearObjects(): void {
     for (const e of this.entries) {
-      this.objectGroup.remove(e.mesh);
-      (e.mesh.material as THREE.Material).dispose();
-      e.outline.geometry.dispose();
+      this.objectGroup.remove(e.group);
+      // 几何体由 GeometryFactory 缓存并共享，这里只回收描边几何体（材质是共享的）
+      for (const outline of e.outlines) outline.geometry.dispose();
+      e.group.clear();
     }
     this.entries = [];
     this.selectedId = null;
@@ -214,8 +236,8 @@ export class StudioScene {
 
   private applyTransform(entry: ObjectEntry): void {
     const t = entry.transform;
-    entry.mesh.position.set(t.x, t.y, t.z);
-    entry.mesh.rotation.set(
+    entry.group.position.set(t.x, t.y, t.z);
+    entry.group.rotation.set(
       THREE.MathUtils.degToRad(t.rotationX),
       THREE.MathUtils.degToRad(t.rotationY),
       THREE.MathUtils.degToRad(t.rotationZ),
@@ -234,7 +256,7 @@ export class StudioScene {
   }
 
   getPickables(): THREE.Object3D[] {
-    return this.entries.map((e) => e.mesh);
+    return this.entries.flatMap((e) => e.meshes);
   }
 
   getObjectName(id: string): string {
@@ -245,7 +267,8 @@ export class StudioScene {
   setSelected(id: string | null): void {
     this.selectedId = id;
     for (const e of this.entries) {
-      e.outline.visible = e.def.id === id;
+      const on = e.def.id === id;
+      for (const outline of e.outlines) outline.visible = on;
     }
   }
 
@@ -270,10 +293,9 @@ export class StudioScene {
     // 选中物体轻微脉动缩放，提供"已选中"的视觉反馈
     for (const e of this.entries) {
       if (e.def.id === this.selectedId) {
-        const s = (e.def.scale ?? 1) * (1 + Math.sin(performance.now() * 0.004) * 0.015);
-        e.mesh.scale.setScalar(s);
-      } else if (e.mesh.scale.x !== (e.def.scale ?? 1)) {
-        e.mesh.scale.setScalar(e.def.scale ?? 1);
+        e.group.scale.setScalar(1 + Math.sin(performance.now() * 0.004) * 0.015);
+      } else if (e.group.scale.x !== 1) {
+        e.group.scale.setScalar(1);
       }
     }
     // 灯光轻微呼吸，营造"影棚"氛围

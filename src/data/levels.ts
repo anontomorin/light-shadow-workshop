@@ -1,4 +1,9 @@
-import type { LevelDefinition, LightDefinition, Transform3D } from '../gameplay/LevelData';
+import type {
+  LevelDefinition,
+  LightDefinition,
+  ShapePart,
+  Transform3D,
+} from '../gameplay/LevelData';
 
 /**
  * 关卡数据。
@@ -78,6 +83,83 @@ const L6_LIGHT: LightDefinition = {
 };
 const L6 = L6_LIGHT.target;
 const L6_INIT = L6_LIGHT.initial;
+
+// ═════════════════════ 花窗构件工具箱（第 7–10 关） ═════════════════════
+//
+// 这四关的题目取自经典花窗：方格窗、菱花窗、冰裂纹、窗棂总成。
+// 每个"可操作物体"都是一个由棂条拼成的**复合构件** —— 玩家拖动的是整个构件，
+// 投影时逐棂条求凸包再取并集，因此格眼（棂条之间的空隙）会被如实保留，
+// 不会糊成一块实心窗板（这正是"花窗的影子"与"一块木板的影子"的区别）。
+//
+// 单位说明：构件尺寸用**物体局部单位**。目标状态统一放在 z = 4.0、光源在 z = 14，
+// 投影放大率 t = 14 / (14 − 4) = 1.4，所以墙面上的影子尺寸 ≈ 局部尺寸 × 1.4。
+
+/** 一根棂条：中心在 (dx, dy)，长 len、宽 wid，可绕自身中心旋转 rot（度） */
+function slat(dx: number, dy: number, len: number, wid: number, rot = 0): ShapePart {
+  return { shape: 'slat', dx, dy, w: len, h: wid, rot };
+}
+
+/** 一个菱形零件：直接标半宽 / 半高 */
+function rhombus(dx: number, dy: number, halfW: number, halfH: number): ShapePart {
+  return { shape: 'diamond', dx, dy, w: halfW * 2, h: halfH * 2 };
+}
+
+/** 矩形窗框：外框 halfW × halfH、框条厚 t。四段互不重叠，投影并集后是完整框 */
+function frame(halfW: number, halfH: number, t: number): ShapePart[] {
+  return [
+    slat(0, halfH - t / 2, halfW * 2, t),
+    slat(0, -halfH + t / 2, halfW * 2, t),
+    slat(-halfW + t / 2, 0, t, halfH * 2 - t * 2),
+    slat(halfW - t / 2, 0, t, halfH * 2 - t * 2),
+  ];
+}
+
+/** 菱花心：中心一大菱 + 四周按 count 等分均布的小菱（六椀菱花的简化示意） */
+function rosette(coreHalfW: number, coreHalfH: number, ringR: number, petalHalfW: number, petalHalfH: number, count = 6, startDeg = 30): ShapePart[] {
+  const parts: ShapePart[] = [rhombus(0, 0, coreHalfW, coreHalfH)];
+  for (let k = 0; k < count; k++) {
+    const a = ((startDeg + (k * 360) / count) * Math.PI) / 180;
+    parts.push(rhombus(Math.cos(a) * ringR, Math.sin(a) * ringR, petalHalfW, petalHalfH));
+  }
+  return parts;
+}
+
+// ───────────────────────────────── 第 7 关 ─────────────────────────────────
+// 方格窗：外框 + 十字棂 + 四角菱花。最基础的一扇窗棂，用来认识"格眼"。
+const L7_LIGHT: LightDefinition = {
+  initial: { x: 0, y: 5.5, z: 14 },
+  target: { x: 0, y: 5.5, z: 14 },
+};
+const L7 = L7_LIGHT.target;
+
+const L7_HALF_W = 3.0;
+const L7_HALF_H = 2.2;
+const L7_BAR = 0.28;
+
+// ───────────────────────────────── 第 8 关 ─────────────────────────────────
+// 菱花窗：外框 + 三交棂（0° / 60° / 120° 三个方向交叉）+ 六椀菱花心。
+const L8_LIGHT: LightDefinition = {
+  initial: { x: 0, y: 5.5, z: 14 },
+  target: { x: 0, y: 5.5, z: 14 },
+};
+const L8 = L8_LIGHT.target;
+
+// ───────────────────────────────── 第 9 关 ─────────────────────────────────
+// 冰裂纹：外框 + 两组互不对称的斜棂。因为不对称，角度方向错了就看得出。
+const L9_LIGHT: LightDefinition = {
+  initial: { x: 0.8, y: 5.2, z: 14 },
+  target: { x: 0, y: 5.5, z: 14 },
+};
+const L9 = L9_LIGHT.target;
+const L9_INIT = L9_LIGHT.initial;
+
+// ───────────────────────────────── 第 10 关 ─────────────────────────────────
+// 窗棂总成：外框 + 井字格 + 菱格 + 圆心，四类构件叠加成一扇完整的圆光窗。
+const L10_LIGHT: LightDefinition = {
+  initial: { x: 0, y: 5.5, z: 14 },
+  target: { x: 0, y: 5.5, z: 14 },
+};
+const L10 = L10_LIGHT.target;
 
 export const LEVELS: LevelDefinition[] = [
   {
@@ -365,6 +447,259 @@ export const LEVELS: LevelDefinition[] = [
       depth: true,
       light: true,
       lightDistance: true,
+    },
+  },
+
+  // ─────────────────────── 花窗题目（第 7–10 关） ───────────────────────
+  // 从这一关起，物体变成"花窗构件"：一整个窗框 / 一组棂条 / 一丛菱花。
+  // 判断标准也随之上了一个台阶 —— 不只是大轮廓要对，格眼（棂条之间的空隙）
+  // 也必须落在正确的位置，否则影子里那些缝隙对不上，IoU 立刻掉下来。
+  {
+    id: 7,
+    title: '方格窗 · 十字棂',
+    description: '把窗框、十字棂与四角菱花摆回原位，让墙上出现一扇方正的方格花窗。',
+    tutorial:
+      '本关的物体是"花窗构件"：窗框、十字棂、四角菱花各是一个整体。拖动整个构件摆位，用旋转滑杆校正朝向——注意窗格之间的空隙也会被如实投影出来。',
+    light: L7_LIGHT,
+    objects: [
+      {
+        id: 'w-frame',
+        name: '窗框',
+        shape: 'slat',
+        parts: frame(L7_HALF_W, L7_HALF_H, L7_BAR),
+        color: '#8a5a33',
+        initial: place(L7, { x: -4.4, y: 7.0 }, 2.8, { z: 34 }),
+        target: place(L7, { x: 0, y: 5.5 }, 4, { z: 0 }),
+      },
+      {
+        id: 'w-cross',
+        name: '十字棂',
+        shape: 'cross',
+        parts: [
+          slat(0, 0, (L7_HALF_H - L7_BAR) * 2, 0.26),
+          slat(0, 0, (L7_HALF_W - L7_BAR) * 2, 0.26),
+        ],
+        color: '#c2452d',
+        initial: place(L7, { x: 4.6, y: 7.6 }, 5.0, { z: 62 }),
+        target: place(L7, { x: 0, y: 5.5 }, 4, { z: 0 }),
+      },
+      {
+        id: 'w-blossom',
+        name: '四角菱花',
+        shape: 'diamond',
+        parts: [
+          rhombus(-1.36, 0.96, 0.46, 0.6),
+          rhombus(1.36, 0.96, 0.46, 0.6),
+          rhombus(-1.36, -0.96, 0.46, 0.6),
+          rhombus(1.36, -0.96, 0.46, 0.6),
+        ],
+        color: '#2f6b57',
+        initial: place(L7, { x: -2.6, y: 2.2 }, 2.4, { z: -28 }),
+        target: place(L7, { x: 0, y: 5.5 }, 4, { z: 0 }),
+      },
+    ],
+    matchThreshold: 0.69,
+    excellentThreshold: 0.72,
+    masterThreshold: 0.75,
+    recommendedMoves: 52,
+    hintSteps: [
+      '三个构件都要挪回墙的正中间：先摆最大的窗框，它的边要水平、竖直。',
+      '窗框到位后，把"十字棂"转到与窗框对齐（旋转归零），它才能把窗分成四格。',
+      '最后放"四角菱花"：四个菱形分别落在四格的正中，别压到棂条上。',
+    ],
+    controls: {
+      move: true,
+      rotate: true,
+      flip: false,
+      depth: true,
+      light: false,
+      lightDistance: false,
+    },
+  },
+
+  {
+    id: 8,
+    title: '菱花窗 · 三交六椀',
+    description: '用外框、三交棂与六椀菱花心，拼出经典的三交六椀菱花窗轮廓。',
+    tutorial:
+      '三交棂是一组 0° / 60° / 120° 三个方向的棂条，六椀菱花心由 1 大 6 小共七枚菱形组成。转动构件时整个花心会一起转，注意让菱花心保持正立。',
+    light: L8_LIGHT,
+    objects: [
+      {
+        id: 'w-frame',
+        name: '外框',
+        shape: 'slat',
+        parts: frame(3.0, 2.4, 0.3),
+        color: '#8a5a33',
+        initial: place(L8, { x: 4.4, y: 2.4 }, 3.0, { z: 48 }),
+        target: place(L8, { x: 0, y: 5.5 }, 4, { z: 0 }),
+      },
+      {
+        id: 'w-triple',
+        name: '三交棂',
+        shape: 'slat',
+        parts: [
+          slat(0, 0, 5.2, 0.26, 0),
+          slat(0, 0, 5.2, 0.26, 60),
+          slat(0, 0, 5.2, 0.26, 120),
+        ],
+        color: '#c2452d',
+        initial: place(L8, { x: -4.8, y: 8.2 }, 5.4, { z: -22 }),
+        target: place(L8, { x: 0, y: 5.5 }, 4, { z: 0 }),
+      },
+      {
+        id: 'w-rosette',
+        name: '六椀菱花心',
+        shape: 'diamond',
+        parts: rosette(0.55, 0.7, 1.35, 0.34, 0.44),
+        color: '#d9a72c',
+        initial: place(L8, { x: -0.8, y: 1.5 }, 2.2, { z: 36 }),
+        target: place(L8, { x: 0, y: 5.5 }, 4, { z: 0 }),
+      },
+    ],
+    matchThreshold: 0.69,
+    excellentThreshold: 0.72,
+    masterThreshold: 0.74,
+    recommendedMoves: 58,
+    hintSteps: [
+      '外框仍是最先要摆正的：四条框条必须水平或竖直。',
+      '三交棂旋回 0° 后，三根棂条才会呈 0° / 60° / 120° 的标准分布。',
+      '六椀菱花心的中心大菱形要正立在窗心，周围六枚小菱形均匀环绕。',
+    ],
+    controls: {
+      move: true,
+      rotate: true,
+      flip: false,
+      depth: true,
+      light: false,
+      lightDistance: false,
+    },
+  },
+
+  {
+    id: 9,
+    title: '冰裂纹 · 碎影',
+    description: '两组互不对称的斜棂拼出冰裂纹，这一关角度差一点就看得出。',
+    tutorial:
+      '冰裂纹没有对称轴，所以旋转角度必须真的对准。可以让一个构件先大致到位，再用角度滑杆逐度微调，看着墙上的缝隙收拢。',
+    light: L9_LIGHT,
+    objects: [
+      {
+        id: 'w-frame',
+        name: '外框',
+        shape: 'slat',
+        parts: frame(2.9, 2.3, 0.26),
+        color: '#8a5a33',
+        initial: place(L9_INIT, { x: 5.0, y: 8.0 }, 2.8, { z: -36 }),
+        target: place(L9, { x: 0, y: 5.5 }, 4, { z: 0 }),
+      },
+      {
+        id: 'w-main',
+        name: '主裂',
+        shape: 'slat',
+        parts: [
+          slat(-0.4, 0.2, 5.8, 0.22, 72),
+          slat(0.5, -0.3, 5.4, 0.22, -18),
+          slat(-1.0, -1.1, 3.2, 0.2, 108),
+        ],
+        color: '#5fa8a0',
+        initial: place(L9_INIT, { x: -5.2, y: 7.4 }, 5.6, { z: 54 }),
+        target: place(L9, { x: 0, y: 5.5 }, 4, { z: 0 }),
+      },
+      {
+        id: 'w-sub',
+        name: '副裂',
+        shape: 'slat',
+        parts: [
+          slat(0.9, 1.2, 3.0, 0.2, 24),
+          slat(-1.2, 0.9, 3.4, 0.2, -52),
+          slat(1.4, -1.0, 2.6, 0.2, 63),
+        ],
+        color: '#b98bd6',
+        initial: place(L9_INIT, { x: -1.2, y: 2.0 }, 2.2, { z: -70 }),
+        target: place(L9, { x: 0, y: 5.5 }, 4, { z: 0 }),
+      },
+    ],
+    matchThreshold: 0.67,
+    excellentThreshold: 0.7,
+    masterThreshold: 0.72,
+    recommendedMoves: 64,
+    hintSteps: [
+      '冰裂纹只有裂而不碎的一整块：先把外框摆正，再把两组斜棂挪到框内。',
+      '两组斜棂的旋转角必须精确归零，否则缝隙的走向会整体偏掉。',
+      '最后用方向键（按住 Shift 为粗调）把构件推到缝隙完全咬合的位置。',
+    ],
+    controls: {
+      move: true,
+      rotate: true,
+      flip: false,
+      depth: true,
+      light: false,
+      lightDistance: false,
+    },
+  },
+
+  {
+    id: 10,
+    title: '窗棂总成 · 圆光窗',
+    description: '把外框、井字格、菱格与圆心四类构件叠合，组成一扇完整的圆光花窗。',
+    tutorial:
+      '最终挑战：四类构件层层叠合，深度也必须一致——同一扇窗的不同构件若不在同一深度，影子会被放大成不同大小，缝隙就对不上了。',
+    light: L10_LIGHT,
+    objects: [
+      {
+        id: 'w-frame',
+        name: '外框',
+        shape: 'slat',
+        parts: frame(3.2, 2.5, 0.32),
+        color: '#8a5a33',
+        initial: place(L10, { x: -4.8, y: 8.0 }, 2.6, { z: 42 }),
+        target: place(L10, { x: 0, y: 5.5 }, 4, { z: 0 }),
+      },
+      {
+        id: 'w-grid',
+        name: '井字格',
+        shape: 'cross',
+        parts: [slat(0, 0, (2.5 - 0.32) * 2, 0.26), slat(0, 0, (3.2 - 0.32) * 2, 0.26)],
+        color: '#c2452d',
+        initial: place(L10, { x: 4.6, y: 7.8 }, 5.8, { z: -54 }),
+        target: place(L10, { x: 0, y: 5.5 }, 4, { z: 0 }),
+      },
+      {
+        id: 'w-diag',
+        name: '菱格',
+        shape: 'slat',
+        parts: [slat(0, 0, 7.0, 0.22, 45), slat(0, 0, 7.0, 0.22, -45)],
+        color: '#d9a72c',
+        initial: place(L10, { x: 0.6, y: 2.2 }, 3.2, { z: 28 }),
+        target: place(L10, { x: 0, y: 5.5 }, 4, { z: 0 }),
+      },
+      {
+        id: 'w-ring',
+        name: '圆心',
+        shape: 'ring',
+        parts: [{ shape: 'ring', w: 2.6, h: 2.6 }],
+        color: '#2f6b57',
+        initial: place(L10, { x: -2.9, y: 1.7 }, 5.2, { z: -12 }),
+        target: place(L10, { x: 0, y: 5.5 }, 4, { z: 0 }),
+      },
+    ],
+    matchThreshold: 0.7,
+    excellentThreshold: 0.73,
+    masterThreshold: 0.76,
+    recommendedMoves: 78,
+    hintSteps: [
+      '四类构件的深度都要拉到同一档（约 4.0），否则影子大小会不一致。',
+      '井字格与菱格的旋转角都归零，它们才会与外框的边线对齐。',
+      '圆心是一枚圆环——注意中间是镂空的，环形的里外边界都要对准。',
+    ],
+    controls: {
+      move: true,
+      rotate: true,
+      flip: false,
+      depth: true,
+      light: false,
+      lightDistance: false,
     },
   },
 ];

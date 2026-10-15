@@ -1,6 +1,7 @@
 import './styles/global.css';
 import './styles/screens.css';
 import './styles/components.css';
+import './styles/workshop.css';
 
 import { GameApp } from './app/GameApp';
 import { isWebGLAvailable } from './scene/SceneManager';

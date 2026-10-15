@@ -9,6 +9,10 @@ dist/
 *.local
 *.log
 
+# 本地检查脚本的输出（.check/ 与 .baseline/ 都是临时诊断目录，不入库）
+.check/
+.baseline/
+
 # e2e 像素探针的临时截图
 docs/shots/_tmp-*.png
 

@@ -10,10 +10,16 @@ import { GameHUD } from '../ui/GameHUD';
 import { LabHUD } from '../ui/LabHUD';
 import { TitleScreen } from '../ui/TitleScreen';
 import { LevelSelect } from '../ui/LevelSelect';
+import { ModeSelect } from '../ui/ModeSelect';
 import { ResultModal } from '../ui/ResultModal';
 import { PausePanel } from '../ui/SettingsPanel';
 import { GameState } from './GameState';
 import { SoundKit } from './SoundKit';
+import { WorkshopController } from '../workshop/WorkshopController';
+import { PatternGallery } from '../ui/PatternGallery';
+import { AboutPanel } from '../ui/AboutPanel';
+import type { PatternKind } from '../patterns/types';
+import { h } from '../ui/dom';
 import { getLevelById, LEVELS, TOTAL_LEVELS } from '../data/levels';
 import type {
   LevelDefinition,
@@ -22,7 +28,13 @@ import type {
   Transform3D,
 } from '../gameplay/LevelData';
 
-type ScreenName = 'title' | 'levels' | 'game' | 'lab';
+/**
+ * 屏幕名称。
+ *
+ * 「花窗工坊」是主线（title 的一级入口），「影形解谜」与「自由实验室」
+ * 收在二级入口页 modes 里，首页不再直接暴露它们。
+ */
+export type ScreenName = 'title' | 'modes' | 'levels' | 'game' | 'lab' | 'workshop';
 
 /** 匹配度预览的节流间隔（ms） */
 const PREVIEW_INTERVAL = 90;
@@ -54,12 +66,17 @@ export class GameApp {
   private labHUD: LabHUD;
   private titleScreen: TitleScreen;
   private levelSelect: LevelSelect;
+  private modeSelect: ModeSelect;
 
   private screen: ScreenName = 'title';
   private modal: HTMLElement | null = null;
   private currentLevel: LevelDefinition | null = null;
 
   private lab: LabSession;
+  /** 花窗工坊（懒加载其三维舞台，首屏不付出这部分开销） */
+  private workshop!: WorkshopController;
+  /** 始终存在的弹窗层：任何界面都能弹出窗口，不受屏幕切换影响 */
+  private modalLayer: HTMLElement;
 
   private cleared = false;
   private hintIndex = 0;
@@ -115,20 +132,30 @@ export class GameApp {
       ...viewHandlers,
     });
 
+    this.modalLayer = h('div', { class: 'modal-layer' });
+
     this.titleScreen = new TitleScreen(
       {
-        onStart: () => this.startLevel(this.firstUnclearedLevel()),
-        onLevelSelect: () => this.goLevels(),
-        onLab: () => this.enterLab(),
+        onWorkshop: () => this.enterWorkshop(),
+        // 「纹样图鉴」= 先看纹样档案，再从卡片里一键进入花窗工坊
+        onGallery: () => this.openGallery(),
+        // 二级入口：影形解谜 + 自由实验室
+        onChallenge: () => this.showScreen('modes'),
+        onAbout: () => this.openAbout(),
       },
-      'v1.1.0',
+      'v3.0.0',
     );
-    this.titleScreen.setLabUnlocked(this.state.labUnlocked);
 
     this.levelSelect = new LevelSelect(this.state, {
       onPick: (id) => this.startLevel(id),
-      onBack: () => this.showScreen('title'),
+      onBack: () => this.showScreen('modes'),
       onLab: () => this.enterLab(),
+    });
+
+    this.modeSelect = new ModeSelect(this.state, {
+      onLevels: () => this.goLevels(),
+      onLab: () => this.enterLab(),
+      onBack: () => this.showScreen('title'),
     });
 
     // ---- 三维场景 ----
@@ -160,12 +187,25 @@ export class GameApp {
 
     // 左键的归属由"该处是否有可交互物体"决定：
     // 命中物体 → 拖动物体；落在空白 → 环绕视角。
-    this.sceneManager.setPickTest(
-      (x, y) => this.interaction?.hitTestAt(x, y) === true,
+    this.sceneManager.setPickTest((x, y) =>
+      this.screen === 'workshop'
+        ? this.workshop?.hitTest(x, y) === true
+        : this.interaction?.hitTestAt(x, y) === true,
     );
 
     this.keyHandler = (e: KeyboardEvent) => this.onKeyDown(e);
     window.addEventListener('keydown', this.keyHandler);
+
+    // ---- 花窗工坊（与关卡共用同一个场景与渲染器，不新建第二个 WebGL 上下文）----
+    this.workshop = new WorkshopController({
+      sceneManager: this.sceneManager,
+      studio: this.studio,
+      light: this.light,
+      rasterizer: this.rasterizer,
+      onRequestBack: () => this.showScreen('title'),
+      openModal: (el) => this.openModal(el),
+      closeModal: () => this.closeModal(),
+    });
 
     this.showScreen('title');
     this.sceneManager.start();
@@ -177,10 +217,14 @@ export class GameApp {
    * 暴露一个只读 + 测试用的调试钩子，便于自动化测试与现场排查。
    * 它不会改变任何判定逻辑：solve() 只是把物体的变换写到目标参数上，
    * 之后的通关仍然要经过正常的投影计算与 IoU 校验。
+   *
+   * **只在开发 / 测试构建中挂载**（import.meta.env.DEV）。
+   * 生产构建里 window.__lightShadow 不存在，快速通关入口不会泄露给玩家。
    */
   private installDebugHook(): void {
+    if (!import.meta.env.DEV) return;
     const api = {
-      version: '1.1.0',
+      version: '3.0.0',
       getState: () => ({
         screen: this.screen,
         levelId: this.currentLevel?.id ?? null,
@@ -200,6 +244,7 @@ export class GameApp {
         labObjects: this.lab.count,
         matchThreshold: this.currentLevel?.matchThreshold ?? null,
         requiredHits: REQUIRED_CONSECUTIVE_HITS,
+        totalLevels: TOTAL_LEVELS,
       }),
       /** 测试用：读取当前观看视角 */
       getView: () => this.sceneManager.getView(),
@@ -221,6 +266,8 @@ export class GameApp {
         this.scheduleCommit(true);
         return true;
       },
+      /** 测试用：当前应当优先挑战的关卡（按解锁与通关进度推算） */
+      firstUncleared: () => this.firstUnclearedLevel(),
       /** 测试用：直接进入指定关卡 */
       goToLevel: (id: number) => {
         this.startLevel(id);
@@ -229,6 +276,16 @@ export class GameApp {
       /** 测试用：进入自由实验室 */
       goToLab: () => {
         this.enterLab();
+        return true;
+      },
+      /** 测试用：进入二级入口页「光影挑战」 */
+      goToModes: () => {
+        this.showScreen('modes');
+        return true;
+      },
+      /** 测试用：回到标题页 */
+      goToTitle: () => {
+        this.showScreen('title');
         return true;
       },
       /** 测试用：在自由实验室添加一个形状 */
@@ -304,6 +361,60 @@ export class GameApp {
       },
       /** 测试用：某屏幕点是否落在可交互物体上（等价于左键的归属判断） */
       hitTest: (x: number, y: number) => this.interaction.hitTestAt(x, y),
+      // ── 花窗工坊（仅在开发/测试构建中可用）──
+      workshop: {
+        /** 进入花窗工坊 */
+        open: () => {
+          this.enterWorkshop();
+          return true;
+        },
+        /** 工坊状态快照 */
+        state: () => this.workshop.debugState(),
+        /** 切换模板 */
+        pickPattern: (id: string) => {
+          this.workshop.debugPickPattern(id as PatternKind);
+          return true;
+        },
+        /** 修改模板参数 */
+        setParams: (patch: Record<string, unknown>) => {
+          this.workshop.debugSetParams(patch as never);
+          return true;
+        },
+        /** 设置窗格深度 */
+        setDepth: (z: number) => {
+          this.workshop.debugSetDepth(z);
+          return true;
+        },
+        /** 模拟一条自绘折线（窗格局部坐标） */
+        drawPolyline: (pts: Array<{ x: number; y: number }>) =>
+          this.workshop.debugDrawPolyline(pts),
+        /**
+         * 工坊自己的拾取判定（等价于左键落点归属：点在棂条上 ⇒ 选中而非环绕）。
+         * 注意与顶层 `hitTest` 的区别：顶层那个走的是关卡 / 实验室的交互控制器，
+         * 在工坊里它是 disabled 的，恒返回 false。
+         */
+        hitTest: (x: number, y: number) => this.workshop.hitTest(x, y),
+        /** 解析式重算的投影多边形（用于与渲染路径比对） */
+        polygons: () => this.workshop.debugPolygons(),
+        /** 走完整导出路径但不下载，返回 PNG 字节数 */
+        exportPng: () => this.workshop.debugExport(),
+        /** 渲染海报并返回 dataURL（用于校验导出内容） */
+        poster: () => this.workshop.debugRenderPoster(),
+        /** 保存作品并返回作品集 */
+        save: (name?: string) => this.workshop.debugSave(name),
+        /** 打开指定作品 */
+        load: (id: string) => this.workshop.debugLoad(id),
+        /** 点击工具条上的按钮（按文本匹配），用于验证界面按钮真的挂上了逻辑 */
+        clickButton: (text: string) => {
+          const btns = Array.from(document.querySelectorAll('.workshop-screen button'));
+          const norm = (b: Element) => (b.textContent ?? '').replace(/\s+/g, ' ').trim();
+          // 先精确匹配，再退回包含匹配：否则 "撤销" 会先命中工具条上排在更前面的 "撤销节点"。
+          const hit = btns.find((b) => norm(b) === text) ?? btns.find((b) => norm(b).includes(text));
+          if (!hit) return false;
+          (hit as HTMLButtonElement).click();
+          return true;
+        },
+      },
       /** 测试用：读取当前掩码与目标掩码的 IoU */
       score: () =>
         CompletionChecker.scoreOf(
@@ -319,19 +430,33 @@ export class GameApp {
   private showScreen(name: ScreenName): void {
     this.screen = name;
     this.closeModal();
+    // 离开工坊时收拾好舞台（移除窗格、光路线、清空墙面影子），避免污染其它界面
+    if (name !== 'workshop') this.workshop?.leave();
     this.root.replaceChildren();
+    this.root.append(this.modalLayer);
     // 左键环绕只在真正可交互的玩法界面开放
-    this.sceneManager.setLeftOrbitEnabled(name === 'game' || name === 'lab');
+    this.sceneManager.setLeftOrbitEnabled(name === 'game' || name === 'lab' || name === 'workshop');
     if (name === 'title') {
       this.interaction.setEnabled(false);
-      this.titleScreen.setLabUnlocked(this.state.labUnlocked);
       this.root.append(this.titleScreen.root);
+      this.sceneManager.stop();
+    } else if (name === 'modes') {
+      this.interaction.setEnabled(false);
+      this.modeSelect.refresh();
+      this.root.append(this.modeSelect.root);
       this.sceneManager.stop();
     } else if (name === 'levels') {
       this.interaction.setEnabled(false);
       this.levelSelect.refresh();
       this.root.append(this.levelSelect.root);
       this.sceneManager.stop();
+    } else if (name === 'workshop') {
+      this.interaction.setEnabled(false);
+      this.root.append(this.workshop.hud.root);
+      this.workshop.hud.setView(this.sceneManager.getView());
+      this.sceneManager.mount(this.workshop.hud.stageEl);
+      this.sceneManager.start();
+      this.sceneManager.resize();
     } else if (name === 'lab') {
       this.root.append(this.labHUD.root);
       this.labHUD.setView(this.sceneManager.getView());
@@ -356,6 +481,48 @@ export class GameApp {
 
   private goLevels(): void {
     this.showScreen('levels');
+  }
+
+  // ───────────────────────── 花窗工坊 ─────────────────────────
+
+  private enterWorkshop(): void {
+    this.clearTimers();
+    this.currentLevel = null;
+    this.cleared = false;
+    this.projDirty = false;
+    this.labDirty = false;
+    this.interaction.setEnabled(false);
+    // 关卡/实验室的物体与目标轮廓不能留在工坊场景里
+    this.studio.setObjects([], []);
+    this.showScreen('workshop');
+    this.workshop.enter();
+    this.sound.click();
+  }
+
+  /** 模式 A：窗棂初识 / 纹样档案 */
+  private openGallery(): void {
+    const gallery = new PatternGallery({
+      onPickPattern: (id: PatternKind) => {
+        this.closeModal();
+        this.enterWorkshop();
+        this.workshop.onPickPattern(id);
+      },
+      onClose: () => this.closeModal(),
+    });
+    this.openModal(gallery.root);
+  }
+
+  /** 模式 E 的「资料」部分：项目说明与文化来源清单 */
+  private openAbout(): void {
+    const panel = new AboutPanel({
+      onClose: () => this.closeModal(),
+      onOpenLibrary: () => {
+        this.closeModal();
+        this.enterWorkshop();
+        this.workshop.openLibrary();
+      },
+    });
+    this.openModal(panel.root);
   }
 
   // ───────────────────────── 自由实验室 ─────────────────────────
@@ -383,7 +550,8 @@ export class GameApp {
   private leaveLab(): void {
     this.interaction.setEnabled(false);
     this.sceneManager.setLeftOrbitEnabled(false);
-    this.showScreen('title');
+    // 实验室在二级入口里，返回就回到「光影挑战」而不是直接跳回首页
+    this.showScreen('modes');
   }
 
   /** 重建自由实验室的三维物体与界面列表 */
@@ -723,14 +891,20 @@ export class GameApp {
   private openModal(el: HTMLElement): void {
     this.closeModal();
     this.modal = el;
-    this.hud.modalHost.append(el);
-    this.interaction.setEnabled(false);
+    this.modalLayer.append(el);
+    if (this.screen === 'workshop') this.workshop.setInteractionEnabled(false);
+    else this.interaction.setEnabled(false);
   }
 
   private closeModal(): void {
     if (this.modal) {
       this.modal.remove();
       this.modal = null;
+    }
+    if (this.screen === 'workshop') {
+      this.workshop?.setInteractionEnabled(true);
+      this.workshop?.onModalClosed();
+      return;
     }
     if ((this.screen === 'game' && !this.cleared) || this.screen === 'lab') {
       this.interaction.setEnabled(true);
@@ -767,6 +941,10 @@ export class GameApp {
   // ───────────────────────── 键盘 ─────────────────────────
 
   private onKeyDown(e: KeyboardEvent): void {
+    if (this.screen === 'workshop') {
+      if (e.key === 'Escape' && this.modal) this.closeModal();
+      return;
+    }
     if (this.screen === 'lab') {
       if (e.key === 'Escape') this.leaveLab();
       else if (e.key === 'r' || e.key === 'R') this.resetLabScene();
@@ -795,6 +973,8 @@ export class GameApp {
     } else if (this.screen === 'lab' && this.labDirty) {
       this.studio.projection.setCurrent(this.lab.polygons());
       this.labDirty = false;
+    } else if (this.screen === 'workshop') {
+      this.workshop.onFrame();
     }
     this.studio.update(dt);
   }
