@@ -107,7 +107,7 @@
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  font-size: 12px;
+  font-size: var(--fs-note);
   letter-spacing: 0.18em;
   color: var(--ink-soft);
 }
@@ -125,7 +125,8 @@
   font-size: clamp(44px, 6.4vw, 82px);
   font-weight: 700;
   letter-spacing: 0.14em;
-  line-height: 1.05;
+  /* 行高给到 1.12：1.05 时 82px 的字会被行盒切掉下沿（实测 scrollHeight 多 3px） */
+  line-height: 1.12;
   color: var(--ink);
   text-shadow: 0 2px 0 rgba(255, 255, 255, 0.6);
 }
@@ -133,39 +134,47 @@
 .title-sub {
   margin-top: 10px;
   font-family: var(--font-kai);
-  font-size: clamp(16px, 2vw, 24px);
+  font-size: clamp(17px, 2.1vw, 26px);
   letter-spacing: 0.42em;
   color: var(--primary);
 }
 
-/* 朱砂印章：贴在标题右侧 */
+/* 朱砂印章：贴在标题右侧，题名随花窗轮播切换。
+   竖排要放得下「三交六椀菱花」六个字，所以高度改由内容撑开。 */
 .title-seal {
   position: absolute;
   top: 54px;
   right: 6px;
   width: 46px;
-  height: 76px;
+  min-height: 76px;
   display: flex;
   align-items: center;
   justify-content: center;
   writing-mode: vertical-rl;
-  padding: 8px 0;
+  padding: 9px 0;
   border-radius: 5px;
   background: var(--cinnabar);
   color: #fff5ee;
   font-family: var(--font-title);
-  font-size: 19px;
+  font-size: var(--fs-title-sm);
   font-weight: 600;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
+  line-height: 1.1;
   transform: rotate(-5deg);
+  transition: opacity var(--dur-fast) var(--ease);
   box-shadow: 0 3px 0 color-mix(in srgb, var(--cinnabar-dark) 85%, transparent),
     0 10px 24px rgba(180, 69, 47, 0.22);
+}
+
+/* 换字前的短暂淡出（文字本身没法做过渡） */
+.title-seal.is-swapping {
+  opacity: 0.2;
 }
 
 .title-desc {
   margin-top: 22px;
   max-width: 44ch;
-  font-size: 15px;
+  font-size: var(--fs-lead);
   line-height: 1.95;
   color: var(--ink-soft);
 }
@@ -182,7 +191,7 @@
   position: absolute;
   right: 22px;
   bottom: 18px;
-  font-size: 12px;
+  font-size: var(--fs-note);
   color: var(--ink-faint);
   letter-spacing: 0.06em;
 }
@@ -229,6 +238,55 @@
   height: 100%;
 }
 
+/* 三扇窗叠在同一位置交叉淡入：纸底与印章常驻，只有窗格与影子参与切换 */
+.hero-frame {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transform: translateY(10px) scale(1.02);
+  transition: opacity 760ms var(--ease), transform 760ms var(--ease);
+  will-change: opacity, transform;
+}
+
+.hero-frame.is-active {
+  opacity: 1;
+  transform: none;
+}
+
+.hero-dots {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 26px;
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+  gap: 11px;
+}
+
+/* 指示点做成小菱形，呼应窗棂与回纹的方形语汇 */
+.hero-dot {
+  width: 9px;
+  height: 9px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--cinnabar) 55%, transparent);
+  border-radius: 1px;
+  background: transparent;
+  transform: rotate(45deg);
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease),
+    transform var(--dur) var(--ease);
+}
+
+.hero-dot:hover {
+  border-color: var(--cinnabar);
+}
+
+.hero-dot.is-current {
+  background: var(--cinnabar);
+  border-color: var(--cinnabar);
+  transform: rotate(45deg) scale(1.22);
+}
+
 .hero-caption {
   position: absolute;
   left: 0;
@@ -237,6 +295,8 @@
   text-align: center;
   color: var(--ink-soft);
   letter-spacing: 0.04em;
+  /* 说明行压在窗影上，宋体笔画细，用一圈极淡纸色柔光把字托出来 */
+  text-shadow: 0 0 6px rgba(253, 248, 238, 0.95), 0 1px 2px rgba(253, 248, 238, 0.9);
 }
 
 /* ============================================================
@@ -334,25 +394,25 @@
   border-radius: 3px;
   background: var(--cinnabar);
   color: #fff5ee;
-  font-size: 11px;
+  font-size: var(--fs-label);
   letter-spacing: 0.16em;
 }
 
 .mode-title {
   font-family: var(--font-title);
-  font-size: 26px;
+  font-size: 27px;
   font-weight: 700;
   letter-spacing: 0.08em;
 }
 
 .mode-subtitle {
-  font-size: 12px;
+  font-size: var(--fs-note);
   color: var(--ink-faint);
   letter-spacing: 0.04em;
 }
 
 .mode-body {
-  font-size: 13.5px;
+  font-size: var(--fs-body);
   line-height: 1.9;
   color: var(--ink-soft);
   max-width: 60ch;
@@ -394,14 +454,14 @@
 
 .screen-header h1 {
   font-family: var(--font-title);
-  font-size: 28px;
+  font-size: 29px;
   font-weight: 700;
   letter-spacing: 0.1em;
 }
 
 .screen-header .sub {
   margin-top: 8px;
-  font-size: 13.5px;
+  font-size: var(--fs-body);
   line-height: 1.7;
   color: var(--ink-soft);
   max-width: 70ch;
@@ -418,7 +478,7 @@
   align-items: center;
   gap: 10px;
   margin-bottom: 14px;
-  font-size: 13px;
+  font-size: var(--fs-body);
   letter-spacing: 0.16em;
   color: var(--ink-soft);
 }
@@ -500,20 +560,20 @@
 }
 
 .level-card .lv-no {
-  font-size: 11px;
+  font-size: var(--fs-label);
   letter-spacing: 0.2em;
   color: var(--ink-faint);
 }
 
 .level-card .lv-title {
   font-family: var(--font-title);
-  font-size: 19px;
+  font-size: 20px;
   font-weight: 700;
   letter-spacing: 0.06em;
 }
 
 .level-card .lv-desc {
-  font-size: 12.5px;
+  font-size: var(--fs-note);
   line-height: 1.7;
   color: var(--ink-soft);
   flex: 1;
@@ -555,7 +615,9 @@
 .game-screen,
 .lab-screen {
   display: grid;
-  grid-template-columns: 1fr 328px;
+  /* 右侧面板承载了本关全部文字（读数、滑杆标签、操作说明），
+     字号上调后 328px 会让"三分之四/正视/俯视/左侧/右侧"挤成 4+1 两行，故加宽 */
+  grid-template-columns: 1fr 352px;
   grid-template-rows: 1fr auto;
   background: var(--bg);
 }
@@ -602,14 +664,14 @@
 }
 
 .topbar-info .lv {
-  font-size: 11px;
+  font-size: var(--fs-label);
   letter-spacing: 0.2em;
   color: var(--ink-faint);
 }
 
 .topbar-info .name {
   font-family: var(--font-title);
-  font-size: 15px;
+  font-size: var(--fs-lead);
   font-weight: 700;
   letter-spacing: 0.06em;
 }
@@ -629,7 +691,7 @@
   background: color-mix(in srgb, var(--surface) 94%, transparent);
   border: 1px solid var(--line);
   border-left: 3px solid var(--jade);
-  font-size: 13px;
+  font-size: var(--fs-body);
   line-height: 1.7;
   color: var(--ink-soft);
   z-index: 9;
@@ -686,7 +748,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: var(--fs-note);
   font-weight: 700;
   letter-spacing: 0.14em;
   color: var(--ink-soft);
@@ -703,7 +765,7 @@
 
 .side-empty {
   padding: 12px;
-  font-size: 13px;
+  font-size: var(--fs-body);
   color: var(--ink-faint);
   line-height: 1.7;
 }
@@ -712,7 +774,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 15px;
+  font-size: var(--fs-lead);
   font-weight: 600;
   margin-bottom: 10px;
 }
@@ -728,7 +790,7 @@
   grid-template-columns: repeat(2, 1fr);
   gap: 6px 10px;
   margin-bottom: 12px;
-  font-size: 12px;
+  font-size: var(--fs-note);
   color: var(--ink-soft);
 }
 
@@ -739,13 +801,13 @@
 
 .keyhint {
   margin-top: 10px;
-  font-size: 12px;
+  font-size: var(--fs-note);
   color: var(--ink-faint);
   line-height: 1.85;
 }
 
 .side-hint {
-  font-size: 13px;
+  font-size: var(--fs-body);
   line-height: 1.7;
   color: #7a5316;
 }
@@ -789,9 +851,11 @@
   .title-seal {
     position: static;
     display: inline-flex;
-    width: 36px;
-    height: 58px;
-    font-size: 15px;
+    width: 34px;
+    min-height: 58px;
+    padding: 7px 0;
+    font-size: var(--fs-body);
+    letter-spacing: 0.06em;
     margin-top: 8px;
     transform: rotate(-5deg);
   }
@@ -830,7 +894,7 @@
     grid-row: 2;
     flex-direction: row;
     flex-wrap: wrap;
-    max-height: 220px;
+    max-height: 250px;
     border-left: none;
     border-top: 2px solid var(--wood-light);
   }
@@ -867,7 +931,7 @@
   }
 
   .title-main {
-    font-size: 44px;
+    font-size: 46px;
   }
 
   .mode-icon {

@@ -15,7 +15,7 @@
   border-radius: 4px;
   background: var(--surface);
   color: var(--ink);
-  font-size: 14px;
+  font-size: var(--fs-lead);
   font-weight: 500;
   letter-spacing: 0.06em;
   transition: transform var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease),
@@ -116,22 +116,22 @@
 
 .btn-lg {
   padding: 13px 28px;
-  font-size: 15.5px;
+  font-size: var(--fs-title-sm);
   letter-spacing: 0.1em;
 }
 
 .btn-sm {
   padding: 5px 11px;
-  font-size: 12.5px;
+  font-size: var(--fs-note);
   letter-spacing: 0.03em;
 }
 
 .btn-icon {
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   padding: 0;
   border-radius: 4px;
-  font-size: 15px;
+  font-size: var(--fs-lead);
 }
 
 /* 标题页的「纹样图鉴」「光影挑战」：木色与碧玉的次要主色 */
@@ -178,7 +178,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 13px;
+  font-size: var(--fs-body);
   font-weight: 600;
   letter-spacing: 0.1em;
   color: var(--ink-soft);
@@ -186,21 +186,24 @@
 }
 
 /* ---------------- 滑杆 ---------------- */
+/* 滑杆行：标签列要放得下最长的中文标签（"冰裂纹密度""边饰重复数"= 5 字），
+   数值列要放得下 8 位随机种子（20261015）。字号上调后 54 / 48px 都会越界，
+   故按实测给到 72 / 68px */
 .slider-row {
   display: grid;
-  grid-template-columns: 54px 1fr 48px;
+  grid-template-columns: 72px 1fr 68px;
   align-items: center;
   gap: 10px;
   margin-bottom: 10px;
 }
 
 .slider-row > label {
-  font-size: 12px;
+  font-size: var(--fs-note);
   color: var(--ink-soft);
 }
 
 .slider-value {
-  font-size: 12px;
+  font-size: var(--fs-note);
   color: var(--ink);
   text-align: right;
   font-variant-numeric: tabular-nums;
@@ -264,7 +267,8 @@ input[type='range']:disabled {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-width: 240px;
+  /* 字号上调后"匹配度 + 百分比 + 目标线"需要更宽才不挤 */
+  min-width: 268px;
 }
 
 .match-bar {
@@ -306,7 +310,7 @@ input[type='range']:disabled {
 }
 
 .match-readout {
-  font-size: 15px;
+  font-size: var(--fs-lead);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   min-width: 52px;
@@ -314,7 +318,7 @@ input[type='range']:disabled {
 }
 
 .match-label {
-  font-size: 12px;
+  font-size: var(--fs-note);
   color: var(--ink-soft);
   white-space: nowrap;
 }
@@ -326,7 +330,7 @@ input[type='range']:disabled {
   gap: 4px;
   padding: 2px 9px;
   border-radius: 3px;
-  font-size: 12px;
+  font-size: var(--fs-note);
   font-weight: 500;
   background: var(--surface-3);
   color: var(--ink-soft);
@@ -351,7 +355,7 @@ input[type='range']:disabled {
 .stars {
   display: inline-flex;
   gap: 2px;
-  font-size: 13px;
+  font-size: var(--fs-body);
   letter-spacing: 1px;
 }
 
@@ -403,7 +407,7 @@ input[type='range']:disabled {
 
 .modal h2 {
   font-family: var(--font-title);
-  font-size: 22px;
+  font-size: 23px;
   font-weight: 700;
   letter-spacing: 0.08em;
   margin-bottom: 6px;
@@ -411,7 +415,7 @@ input[type='range']:disabled {
 }
 
 .modal .modal-sub {
-  font-size: 14px;
+  font-size: var(--fs-lead);
   color: var(--ink-soft);
   line-height: 1.7;
   margin-bottom: 18px;
@@ -444,13 +448,13 @@ input[type='range']:disabled {
 }
 
 .result-stat .k {
-  font-size: 11px;
+  font-size: var(--fs-label);
   color: var(--ink-soft);
   letter-spacing: 0.08em;
 }
 
 .result-stat .v {
-  font-size: 18px;
+  font-size: 19px;
   font-weight: 700;
   margin-top: 4px;
   font-variant-numeric: tabular-nums;
@@ -465,14 +469,14 @@ input[type='range']:disabled {
   background: var(--accent-soft);
   border-left: 3px solid var(--accent);
   color: #7a5316;
-  font-size: 13px;
+  font-size: var(--fs-body);
   line-height: 1.7;
   animation: fade-in-up var(--dur) var(--ease);
 }
 
 .hint-bubble .hint-icon {
   flex: 0 0 auto;
-  font-size: 15px;
+  font-size: var(--fs-lead);
 }
 
 /* 开关 */
@@ -482,7 +486,7 @@ input[type='range']:disabled {
   justify-content: space-between;
   padding: 10px 0;
   border-bottom: 1px dashed var(--line);
-  font-size: 14px;
+  font-size: var(--fs-lead);
 }
 
 .switch-row:last-child {
@@ -524,13 +528,13 @@ input[type='range']:disabled {
 /* 快捷键小标签 */
 .kbd {
   display: inline-block;
-  min-width: 20px;
+  min-width: 23px;
   padding: 1px 6px;
   border: 1px solid var(--line-strong);
   border-bottom-width: 2px;
   border-radius: 3px;
   background: var(--surface-2);
-  font-size: 11px;
+  font-size: var(--fs-label);
   font-weight: 600;
   color: var(--ink-soft);
   text-align: center;
@@ -551,7 +555,7 @@ input[type='range']:disabled {
   border-radius: 3px;
   border: 1px solid var(--line);
   background: var(--surface-2);
-  font-size: 13px;
+  font-size: var(--fs-body);
   transition: all var(--dur-fast) var(--ease);
 }
 
@@ -592,8 +596,11 @@ input[type='range']:disabled {
 
 .preset-group .btn {
   flex: 1 1 auto;
-  padding: 4px 9px;
-  font-size: 12px;
+  /* 横向收紧、纵向放宽：字号变大后按钮更容易被挤到第二行，
+     收紧内边距让"三分之四/正视/俯视/左侧/右侧"回到同一行 */
+  padding: 5px 7px;
+  font-size: var(--fs-note);
+  letter-spacing: 0;
 }
 
 /* 自由实验室：添加几何体的按钮网格 */
@@ -605,7 +612,7 @@ input[type='range']:disabled {
 
 .lab-add-grid .btn {
   padding: 6px 4px;
-  font-size: 12px;
+  font-size: var(--fs-note);
   letter-spacing: 0.02em;
 }
 
@@ -629,6 +636,6 @@ input[type='range']:disabled {
   border: none;
   inset: auto -6px auto auto;
   color: #3d2c05;
-  font-size: 11px;
+  font-size: var(--fs-label);
   box-shadow: var(--shadow-sm);
 }

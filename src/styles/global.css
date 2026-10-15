@@ -53,11 +53,31 @@
   --radius: 10px;
   --radius-lg: 16px;
 
-  --font: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', system-ui,
-    -apple-system, 'Helvetica Neue', Arial, sans-serif;
-  /* 标题与题签用衬线（书卷气），不引入任何网络字体 */
-  --font-title: 'Songti SC', 'STSong', 'Noto Serif SC', 'Source Han Serif SC', 'SimSun', serif;
-  --font-kai: 'STKaiti', 'KaiTi', 'Kaiti SC', 'STSong', 'SimSun', serif;
+  /* 正文与界面：宋体系（书卷气）。
+     全部是系统本地字体族，不 @import、不打包字体文件，保持零外部资源依赖与离线可用。 */
+  --font: 'Songti SC', 'STSong', 'Noto Serif SC', 'Source Han Serif SC', 'SimSun', serif;
+  /* 标题：楷体系（手写感），中国传统题签的常见取法 */
+  --font-title: 'Kaiti SC', 'STKaiti', 'KaiTi', 'TW-Kai', 'Songti SC', 'STSong', 'SimSun', serif;
+  /* 题签 / 引文：与标题同源，保留独立变量以便日后单独微调 */
+  --font-kai: 'Kaiti SC', 'STKaiti', 'KaiTi', 'TW-Kai', 'Songti SC', 'STSong', 'SimSun', serif;
+
+  /* ---------- 字号梯度（唯一真源） ----------
+     正文改为宋体后，笔画比黑体细，小字号明显更"累眼"：
+     实测工坊界面原先有 108 处文字落在 12px、34 处落在 11px，
+     读起来吃力。因此整体上调一档，且**越小的字号加得越多**
+     （10→12、12→14、14→16），让信息密度与可读性重新平衡。
+     调版面只改这里；不要在各分文件里另写字号。 */
+  --fs-caption: 12px; /* 角标、序号、键位提示（原 10px） */
+  --fs-label: 13px; /* 次级标签、脚注（原 11px） */
+  --fs-note: 14px; /* 面板正文、说明文字 —— 最常用（原 12–12.5px） */
+  --fs-body: 15px; /* 强调正文、读数（原 13–13.5px） */
+  --fs-lead: 16px; /* 卡片标题、按钮（原 14–15px） */
+  --fs-title-sm: 17px; /* 区块标题（原 15.5–17px） */
+
+  /* 行高：一并收在这里。宋体小字需要更松的行距才不挤 */
+  --lh-tight: 1.4;
+  --lh: 1.6;
+  --lh-loose: 1.8;
 
   --dur-fast: 140ms;
   --dur: 240ms;
@@ -138,12 +158,13 @@ button {
 
 .fatal-error h1 {
   font-family: var(--font-title);
-  font-size: 24px;
+  font-size: 25px;
   font-weight: 600;
 }
 
 .fatal-error p {
   max-width: 520px;
+  font-size: var(--fs-lead);
   line-height: 1.7;
   color: var(--ink-soft);
 }
@@ -154,11 +175,11 @@ button {
 }
 
 .tiny {
-  font-size: 12px;
+  font-size: var(--fs-label);
 }
 
 .small {
-  font-size: 13px;
+  font-size: var(--fs-note);
 }
 
 .mono {

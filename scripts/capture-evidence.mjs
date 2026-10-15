@@ -229,6 +229,21 @@ async function main() {
   await waitFrames(30);
   await shot('01-首屏', '标题页');
 
+  // 首页右侧是「三扇花窗轮播」：等一轮自动切换，确认帧号真的变了再留一张档
+  const heroBefore = await evaluate(
+    `[...document.querySelectorAll('.hero-frame')].findIndex((f) => f.classList.contains('is-active'))`,
+  );
+  await sleep(5200);
+  const heroAfter = await evaluate(
+    `[...document.querySelectorAll('.hero-frame')].findIndex((f) => f.classList.contains('is-active'))`,
+  );
+  if (heroAfter !== heroBefore) {
+    await waitFrames(30);
+    await shot('01b-首屏-轮播第二扇', `标题页：花窗轮播自动切换 ${heroBefore} → ${heroAfter}（印章题名随之更换）`);
+  } else {
+    console.log(`  ! 轮播未切换（帧号仍为 ${heroAfter}），跳过 01b`);
+  }
+
   // ── 2. 纹样图鉴 ──
   console.log('\n[2] 纹样图鉴');
   await clickTitle('纹样图鉴');

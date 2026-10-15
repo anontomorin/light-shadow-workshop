@@ -75,15 +75,18 @@
 }
 
 .workshop-dock .btn {
-  padding: 5px 10px;
-  font-size: 12px;
+  padding: 6px 11px;
+  font-size: var(--fs-note);
 }
 
 /* 主体三列：左栏 · 【三维操作区】 · 右栏。
-   列宽写成变量，收起侧栏时只要把变量归零，画布立刻铺满整行。 */
+   列宽写成变量，收起侧栏时只要把变量归零，画布立刻铺满整行。
+   宽度比字号调整前各加了 16 / 24px：字号涨了约 15%，若列宽不动，
+   面板里的正文会多折十来行、滚动条明显变长（实测右栏 2482 → 2698px）。
+   加宽只是部分补偿，画布仍是最大的一块（1416px 宽下约占 812px）。 */
 .workshop-body {
-  --col-left: 252px;
-  --col-right: 336px;
+  --col-left: 268px;
+  --col-right: 360px;
   display: grid;
   grid-template-columns: var(--col-left) minmax(0, 1fr) var(--col-right);
   grid-template-areas: 'left stage right';
@@ -195,6 +198,11 @@
   position: absolute;
   top: 10px;
   left: 10px;
+  /* 宽度**不要再加**：指引卡是压在画布上的浮层，宽度直接等于遮挡面积。
+     实测（e2e 视口 1418×802，画布 788×647）窗棂投影只从卡片右侧露出约 30px 一条，
+     卡片右边界一旦越过 x≈629，"能直接点中窗棂"的点就只剩 0 个
+     （318px→50 个点 / 326→32 / 336→19 / 348→0）。宁可让长文案多折一行——
+     正文区域本来就带滚动条，画布被盖住却是实打实的损失。 */
   width: 318px;
   max-width: calc(100% - 20px);
   max-height: calc(100% - 46px);
@@ -221,7 +229,7 @@
 
 .guide-title {
   font-family: var(--font-title);
-  font-size: 14px;
+  font-size: var(--fs-lead);
   font-weight: 700;
   letter-spacing: 0.1em;
 }
@@ -269,7 +277,7 @@
 
 .guide-draw-chip {
   display: none;
-  font-size: 12px;
+  font-size: var(--fs-note);
   color: var(--ink-soft);
   letter-spacing: 0.02em;
 }
@@ -283,7 +291,7 @@
 }
 
 .guide-block-title {
-  font-size: 11px;
+  font-size: var(--fs-label);
   font-weight: 700;
   letter-spacing: 0.16em;
   color: var(--jade);
@@ -302,21 +310,21 @@
 .guide-step {
   display: flex;
   gap: 7px;
-  font-size: 12px;
+  font-size: var(--fs-note);
   line-height: 1.5;
   color: var(--ink);
 }
 
 .guide-step-no {
   flex: none;
-  width: 17px;
-  height: 17px;
+  width: 20px;
+  height: 20px;
   margin-top: 1px;
   border-radius: 50%;
   border: 1px solid var(--cinnabar);
   color: var(--cinnabar);
-  font-size: 10px;
-  line-height: 15px;
+  font-size: var(--fs-caption);
+  line-height: 17px;
   text-align: center;
 }
 
@@ -325,7 +333,7 @@
 }
 
 .guide-group-title {
-  font-size: 12px;
+  font-size: var(--fs-note);
   font-weight: 600;
   line-height: 1.45;
   color: var(--wood);
@@ -337,12 +345,14 @@
   align-items: flex-start;
   gap: 8px;
   padding: 0;
-  font-size: 12px;
+  font-size: var(--fs-note);
   line-height: 1.5;
 }
 
 .guide-keys {
-  flex: 0 0 96px;
+  /* 键位列要放得下"Shift + 方向键"这一组（13px 下 Shift≈50px、方向键≈53px，加 3px 间隙），
+     96px 会折成两行；但不能为了它把卡片整体撑宽——卡片宽 = 遮挡画布的面积，见 .guide-card */
+  flex: 0 0 110px;
   display: inline-flex;
   flex-wrap: wrap;
   gap: 3px;
@@ -358,7 +368,7 @@
   right: 0;
   bottom: 0;
   padding: 5px 12px;
-  font-size: 12px;
+  font-size: var(--fs-note);
   line-height: 1.5;
   color: var(--ink-soft);
   background: color-mix(in srgb, var(--surface) 92%, transparent);
@@ -380,22 +390,22 @@
 
 /* ---------------- 顶部栏中的输入 ---------------- */
 .text-input {
-  height: 32px;
+  height: 35px;
   padding: 0 10px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--line-strong);
   background: var(--surface);
   color: var(--ink);
-  font-size: 13px;
-  width: 168px;
+  font-size: var(--fs-body);
+  width: 176px;
 }
 
 .text-input-sm {
-  width: 120px;
+  width: 124px;
 }
 
 .save-state {
-  font-size: 12px;
+  font-size: var(--fs-note);
   color: var(--ink-soft);
   padding: 0 6px;
   white-space: nowrap;
@@ -430,12 +440,12 @@
 }
 
 .pattern-name {
-  font-size: 14px;
+  font-size: var(--fs-lead);
   font-weight: 600;
 }
 
 .pattern-desc {
-  font-size: 11px;
+  font-size: var(--fs-label);
   color: var(--ink-soft);
   line-height: 1.4;
 }
@@ -454,7 +464,7 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 10px;
-  font-size: 13px;
+  font-size: var(--fs-body);
 }
 
 .stat-row .k,
@@ -471,13 +481,13 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
+  font-size: var(--fs-body);
   padding: 4px 0;
   cursor: pointer;
 }
 
 .draw-hint {
-  font-size: 12px;
+  font-size: var(--fs-note);
   color: var(--ink-soft);
   line-height: 1.6;
   margin-top: 6px;
@@ -492,7 +502,7 @@
   max-width: min(680px, calc(100% - 32px));
   padding: 10px 16px;
   border-radius: 999px;
-  font-size: 13px;
+  font-size: var(--fs-body);
   line-height: 1.5;
   background: rgba(255, 252, 246, 0.96);
   border: 1px solid var(--line-strong);
@@ -581,7 +591,7 @@
 
 .draw-hover-label {
   fill: var(--ink);
-  font-size: 11px;
+  font-size: var(--fs-label);
   font-variant-numeric: tabular-nums;
   paint-order: stroke;
   stroke: var(--surface);
@@ -631,7 +641,7 @@
 
 .draw-node-index {
   fill: var(--ink);
-  font-size: 10px;
+  font-size: var(--fs-caption);
   font-variant-numeric: tabular-nums;
   paint-order: stroke;
   stroke: var(--surface);
@@ -659,7 +669,7 @@
 /* ---------------- 文化卡片 / 实验卡 ---------------- */
 .culture-card h3,
 .experiment-card h3 {
-  font-size: 15px;
+  font-size: var(--fs-lead);
 }
 
 .culture-field,
@@ -672,7 +682,7 @@
 .culture-sources .k,
 .gallery-sources .k {
   display: block;
-  font-size: 11px;
+  font-size: var(--fs-label);
   letter-spacing: 0.04em;
   color: var(--jade);
   margin-bottom: 3px;
@@ -681,7 +691,7 @@
 
 .culture-field p,
 .gallery-field p {
-  font-size: 12.5px;
+  font-size: var(--fs-note);
   line-height: 1.7;
   color: var(--ink);
 }
@@ -697,7 +707,7 @@
 
 .culture-model-note .k {
   display: block;
-  font-size: 11px;
+  font-size: var(--fs-label);
   color: var(--cinnabar);
   font-weight: 600;
   margin-bottom: 3px;
@@ -705,7 +715,7 @@
 
 .culture-model-note p,
 .gallery-model-note p {
-  font-size: 12px;
+  font-size: var(--fs-note);
   line-height: 1.65;
 }
 
@@ -723,7 +733,7 @@
 .culture-sources a,
 .gallery-sources a,
 .about-sources a {
-  font-size: 12px;
+  font-size: var(--fs-note);
   color: var(--primary-dark);
   text-decoration: none;
   line-height: 1.5;
@@ -751,19 +761,19 @@
 .experiment-steps {
   margin: 6px 0 8px;
   padding-left: 18px;
-  font-size: 12px;
+  font-size: var(--fs-note);
   line-height: 1.65;
   color: var(--ink-soft);
 }
 
 .experiment-title {
-  font-size: 13px;
+  font-size: var(--fs-body);
   font-weight: 600;
   margin-bottom: 4px;
 }
 
 .experiment-text {
-  font-size: 12.5px;
+  font-size: var(--fs-note);
   line-height: 1.7;
   color: var(--ink);
 }
@@ -828,7 +838,7 @@
 }
 
 .gallery-card-head h3 {
-  font-size: 16px;
+  font-size: var(--fs-title-sm);
 }
 
 .gallery-preview {
@@ -867,13 +877,13 @@
 
 .about-modal h3 {
   margin: 16px 0 6px;
-  font-size: 15px;
+  font-size: var(--fs-lead);
 }
 
 .about-list {
   margin: 0;
   padding-left: 18px;
-  font-size: 12.5px;
+  font-size: var(--fs-note);
   line-height: 1.75;
   color: var(--ink);
 }
@@ -899,7 +909,7 @@
 }
 
 .artwork-name {
-  font-size: 14px;
+  font-size: var(--fs-lead);
   font-weight: 600;
 }
 
@@ -945,15 +955,15 @@
 /* ---------------- 响应式：画布优先 ---------------- */
 @media (max-width: 1440px) {
   .workshop-body {
-    --col-left: 232px;
-    --col-right: 312px;
+    --col-left: 248px;
+    --col-right: 336px;
   }
 }
 
 @media (max-width: 1180px) {
   .workshop-body {
-    --col-left: 216px;
-    --col-right: 292px;
+    --col-left: 228px;
+    --col-right: 312px;
   }
 
   .guide-card {
@@ -982,7 +992,7 @@
   .workshop-left,
   .workshop-right {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
     gap: 10px;
   }
 
@@ -997,7 +1007,7 @@
 
   .text-input,
   .text-input-sm {
-    width: 120px;
+    width: 124px;
   }
 
   .game-topbar {
@@ -1020,7 +1030,7 @@
   }
 
   .notice-bar {
-    font-size: 12px;
+    font-size: var(--fs-note);
     bottom: 10px;
   }
 }

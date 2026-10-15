@@ -6,6 +6,8 @@
  *   2. WebGL 场景正常初始化（未落到降级错误页）；
  *   3. 标题页 → 二级入口「光影挑战」→ 关卡页 → 游戏页的流程可走通，
  *      且影形解谜 / 自由实验室确实已从首页收起（藏入二级入口）；
+ *   3b. 首页右侧三扇花窗按真实纹样轮播，朱砂印章的题名随之同步更换；
+ *      全局字体为**系统本地**的宋体（正文）/ 楷体（标题），不加载任何网络字体；
  *   4. 观看视角可切换（预设 / 滑杆 / 越界夹紧 / 复位）；
  *   5. 真实鼠标拖动会改变物体位置并实时刷新匹配度；
  *   6. 目标状态能够真正触发通关（走完整投影 + IoU 校验，且需连续 3 次达标）；
@@ -287,6 +289,100 @@ async function main() {
   const fatal = await evaluate(`!!document.querySelector('.fatal-error')`);
   check('未落入 WebGL 降级页', fatal === false);
   await screenshot('01-title');
+
+  // ── 1b. 首页花窗轮播与中国风字体 ──
+  console.log('\n[1b] 首页花窗轮播与中国风字体');
+  const heroFrames = await evaluate(`document.querySelectorAll('.hero-frame').length`);
+  check('首页右侧有三扇花窗（轮播）', heroFrames === 3, `帧数=${heroFrames}`);
+  check(
+    '轮播同一时刻只有一扇处于激活态',
+    (await evaluate(`document.querySelectorAll('.hero-frame.is-active').length`)) === 1,
+  );
+
+  const heroInfo = JSON.parse(
+    (await evaluate(
+      `JSON.stringify({
+        caption: document.querySelector('.hero-caption')?.textContent?.trim() ?? '',
+        polys: [...document.querySelectorAll('.hero-frame')].map((f) => f.querySelectorAll('polygon').length),
+        dots: document.querySelectorAll('.hero-dot').length,
+        names: [...document.querySelectorAll('.hero-dot')].map((d) => d.getAttribute('aria-label') ?? ''),
+      })`,
+    )) ?? '{}',
+  );
+  check(
+    '三扇花窗都由纹样生成器实际绘制（SVG 非空）',
+    Array.isArray(heroInfo.polys) && heroInfo.polys.length === 3 && heroInfo.polys.every((n) => n > 0),
+    `多边形数=${heroInfo.polys?.join(' / ')}`,
+  );
+  check(
+    '三扇窗分别是步步锦 / 冰裂纹 / 三交六椀菱花',
+    JSON.stringify(heroInfo.names) === JSON.stringify(['步步锦', '冰裂纹', '三交六椀菱花']),
+    heroInfo.names?.join(' / '),
+  );
+  // 印章题名必须与**当前激活的那一帧**一致。
+  // 注意不要写成 `seal === '步步锦'`：轮播是 4.2 秒自动切换的，
+  // 页面一慢（例如同时跑别的无头 Chrome）就会切到第二扇，那条断言会假失败。
+  // 这里断言的是不变式"印章 == 当前帧的样式名"，并在换字动画（.is-swapping 淡出 220ms）结束后再读。
+  const readSeal = async () =>
+    JSON.parse(
+      await evaluate(
+        `JSON.stringify((() => {
+           const frames = [...document.querySelectorAll('.hero-frame')];
+           const idx = frames.findIndex((f) => f.classList.contains('is-active'));
+           const dot = document.querySelectorAll('.hero-dot')[idx];
+           const seal = document.querySelector('.title-seal');
+           return {
+             idx,
+             expect: dot ? dot.getAttribute('aria-label') ?? '' : '',
+             seal: seal ? seal.textContent.trim() : '',
+             swapping: seal ? seal.classList.contains('is-swapping') : false,
+           };
+         })())`,
+      ),
+    );
+  let sealOk = false;
+  let sealMsg = '';
+  for (let i = 0; i < 14; i++) {
+    const s = await readSeal();
+    sealMsg = `帧${s.idx} 印章="${s.seal}" 当前样式名="${s.expect}"${s.swapping ? '（换字动画中）' : ''}`;
+    if (!s.swapping && s.expect && s.seal === s.expect) {
+      sealOk = true;
+      break;
+    }
+    await sleep(200);
+  }
+  check('朱砂印章显示的是当前窗棂样式名（与当前帧一致）', sealOk, sealMsg);
+  check(
+    '底部说明行标注当前纹样全名',
+    typeof heroInfo.caption === 'string' && heroInfo.caption.includes('窗格示意图由纹样生成器实时绘制'),
+    heroInfo.caption,
+  );
+  check('三扇窗对应三个指示点', heroInfo.dots === 3, `点数=${heroInfo.dots}`);
+
+  // 点第三个指示点 → 立刻切到第三扇；印章要淡出 140ms 后才落新题名，等 700ms 再读
+  const dotActive = await evaluate(
+    `(() => { document.querySelectorAll('.hero-dot')[2].click(); return [...document.querySelectorAll('.hero-frame')].findIndex((f) => f.classList.contains('is-active')); })()`,
+  );
+  check('点击指示点会立刻切换花窗', dotActive === 2, `activeIndex=${dotActive}`);
+  await sleep(700);
+  const sealAfter = await evaluate(`document.querySelector('.title-seal')?.textContent?.trim() ?? ''`);
+  check('印章题名随花窗同步更换', sealAfter === '三交六椀菱花', `印章="${sealAfter}"`);
+
+  // 字体：断言 CSS 令牌本身（稳定），再断言正文没有回退到黑体栈
+  const fontVars = JSON.parse(
+    (await evaluate(
+      `(() => { const cs = getComputedStyle(document.documentElement); return JSON.stringify({ body: getComputedStyle(document.body).fontFamily, bodyVar: cs.getPropertyValue('--font'), titleVar: cs.getPropertyValue('--font-title') }); })()`,
+    )) ?? '{}',
+  );
+  check('正文使用宋体系（中国风）', /Songti|STSong|SimSun/.test(fontVars.bodyVar ?? ''), fontVars.bodyVar?.trim());
+  check('标题使用楷体系（中国风）', /Kaiti|STKaiti|KaiTi/.test(fontVars.titleVar ?? ''), fontVars.titleVar?.trim());
+  check(
+    '正文没有回退到黑体栈',
+    /PingFang|Microsoft YaHei|system-ui/.test(fontVars.body ?? '') === false,
+    fontVars.body ?? '',
+  );
+  const fontFaceCount = await evaluate(`document.fonts.size`);
+  check('未声明任何 @font-face（不加载网络字体）', fontFaceCount === 0, `@font-face 数=${fontFaceCount}`);
 
   // ── 2. 标题页与二级入口 ──────────────────────────────────
   console.log('\n[2] 标题页与二级入口');
