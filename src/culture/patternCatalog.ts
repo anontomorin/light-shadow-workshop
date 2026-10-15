@@ -86,14 +86,6 @@ export const CULTURE_SOURCES: CultureSource[] = [
     accessedAt: '2026-10-15',
     supports: '把二维 Shape 沿深度拉伸为 BufferGeometry 及相关参数说明。',
   },
-  {
-    id: 'cmit-2026',
-    title: '全国大学生数字媒体科技作品及创意竞赛官方网站',
-    publisher: '全国大学生数字媒体科技作品及创意竞赛',
-    url: 'https://www.cmit.cn/wap/index.html',
-    accessedAt: '2026-10-15',
-    supports: '2026 年度官网显示报名及常规作品提交截止为 2026-10-23 23:59:59（北京时间）；以官网最新通知为准。',
-  },
 ];
 
 /** 统一的「数字示意」声明文案 */
